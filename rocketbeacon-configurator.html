@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RocketBeacon Firmware Configurator</title>
+<style>
+* { box-sizing: border-box; }
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: #000000;
+  line-height: 1.5;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  font-size: 15px;
+}
+
+h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; border-bottom: 1px solid #000; padding-bottom: 0.25rem; }
+h3 { font-size: 0.95rem; margin: 1rem 0 0.5rem; }
+.subtitle { color: #444; margin: 0 0 1rem; font-size: 0.9rem; }
+
+fieldset { border: 1px solid #999; margin: 0 0 1rem; padding: 0.75rem 1rem 1rem; }
+legend { font-weight: bold; padding: 0 0.4rem; }
+
+.field { margin: 0.6rem 0; }
+.field > label { display: inline-block; min-width: 170px; vertical-align: top; }
+.field .hint { display: block; color: #555; font-size: 0.8rem; margin: 0.15rem 0 0 170px; }
+.radio-row label { min-width: 0 !important; margin-right: 1rem; white-space: nowrap; }
+.checkbox-field label { min-width: 0 !important; }
+
+input[type=text], input[type=number], select {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.3rem;
+  border: 1px solid #777;
+  background: #fff;
+  color: #000;
+}
+input[type=number] { width: 9rem; }
+input[type=text] { width: 12rem; }
+input[type=range] { vertical-align: middle; width: 12rem; }
+input:disabled { background: #eee; color: #999; }
+.unit { color: #444; font-size: 0.85rem; margin-left: 0.3rem; }
+.rangeval { display: inline-block; min-width: 4rem; font-family: monospace; }
+
+button {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid #555;
+  background: #f0f0f0;
+  color: #000;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: #e2e2e2; }
+button:disabled { color: #999; cursor: not-allowed; }
+
+table.info { border-collapse: collapse; margin: 0.5rem 0; }
+table.info td { padding: 0.15rem 0.75rem 0.15rem 0; vertical-align: top; }
+.mono { font-family: monospace; }
+
+.notice { border: 1px solid #999; background: #f7f7f7; padding: 0.6rem 0.8rem; margin: 0.75rem 0; font-size: 0.88rem; }
+.ok { color: #060; }
+.bad { color: #900; }
+.msg { font-size: 0.82rem; margin: 0.2rem 0 0 170px; }
+
+pre.code {
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  padding: 0.6rem 0.8rem;
+  overflow-x: auto;
+  font-size: 0.78rem;
+  white-space: pre;
+}
+details { margin: 0.75rem 0; }
+summary { cursor: pointer; }
+
+#preview { font-family: monospace; font-size: 0.82rem; white-space: pre; border: 1px solid #ccc; padding: 0.5rem 0.75rem; overflow-x: auto; }
+
+#log {
+  border: 1px solid #999;
+  background: #fcfcfc;
+  font-family: monospace;
+  font-size: 0.78rem;
+  padding: 0.5rem 0.6rem;
+  height: 150px;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+#log .e { color: #900; }
+#log .s { color: #060; }
+
+progress { width: 100%; height: 1rem; }
+.row { margin: 0.6rem 0; }
+.hidden { display: none !important; }
+a { color: #00c; }
+hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
+.footer { color: #555; font-size: 0.8rem; margin-top: 2rem; }
+
+.dropzone { border: 2px dashed #999; padding: 1rem; text-align: center; color: #555; cursor: pointer; }
+.dropzone.over { border-color: #000; background: #f5f5f5; }
+#file-input { display: none; }
+</style>
+</head>
+<body>
+
+<h1>RocketBeacon Firmware Configurator</h1>
+<p class="subtitle">Configure and flash custom firmware for <a href="https://github.com/ElvinC/rocketbeacon">ElvinC/rocketbeacon</a> (STM32WLE5).</p>
+
+<!-- ===================== STEP 1: CONFIGURE ===================== -->
+<h2>1. Configure beacon</h2>
+
+<fieldset>
+<legend>Region &amp; band</legend>
+
+<div class="field radio-row">
+  <label style="min-width:170px">Regulatory region</label>
+  <label><input type="radio" name="region" value="usa" checked onchange="updateBandLimits()"> USA</label>
+  <label><input type="radio" name="region" value="r1" onchange="updateBandLimits()"> ITU Region 1</label>
+  <label><input type="radio" name="region" value="r2" onchange="updateBandLimits()"> ITU Region 2</label>
+  <label><input type="radio" name="region" value="r3" onchange="updateBandLimits()"> ITU Region 3</label>
+</div>
+
+<div class="field radio-row">
+  <label style="min-width:170px">Hardware band</label>
+  <label><input type="radio" name="band" value="440" checked onchange="updateBandLimits()"> 440 MHz (70 cm)</label>
+  <label><input type="radio" name="band" value="220" onchange="updateBandLimits()"> 220 MHz (1.25 m)</label>
+</div>
+
+<div id="band-msg" class="msg" style="margin-left:0"></div>
+<div style="font-size:0.78rem;color:#666;margin-top:0.4rem">
+  Region limits are conservative defaults (US 70 cm is 420&ndash;450 MHz; the ITU baseline is 430&ndash;440 MHz; the 1.25 m
+  band is a Region&nbsp;2 allocation). Always confirm your own national allocation.
+</div>
+</fieldset>
+
+<fieldset>
+<legend>RF &amp; power</legend>
+
+<div class="field">
+  <label for="rf-freq">Center frequency</label>
+  <input type="number" id="rf-freq" value="433.225" step="0.001" oninput="validateFreq()">
+  <span class="unit">MHz</span>
+  <div id="freq-msg" class="msg"></div>
+</div>
+
+<div class="field">
+  <label for="tx-power">Max TX power</label>
+  <input type="range" id="tx-power" min="-9" max="22" value="14" step="1">
+  <span class="rangeval" id="tx-power-val">14 dBm</span>
+  <span class="hint">Top of the power ramp. Each burst steps down from here toward &minus;9 dBm. &le;16 dBm recommended on a CR2032.</span>
+</div>
+
+<div class="field radio-row">
+  <label style="min-width:170px">Transmission mode</label>
+  <label><input type="radio" name="mode" value="fsk" checked onchange="onModeChange()"> FSK (FM tone)</label>
+  <label><input type="radio" name="mode" value="cw" onchange="onModeChange()"> CW (carrier)</label>
+  <label><input type="radio" name="mode" value="both" onchange="onModeChange()"> Both (alternate)</label>
+</div>
+
+<div style="font-size:0.78rem;color:#666;margin-top:0.4rem">
+  Within a burst, the per-beep power ramps from max down to &minus;9 dBm. The quietest beeps fade out first as you move
+  away, so counting audible beeps gives a coarse range cue for direction finding.
+</div>
+</fieldset>
+
+<fieldset id="fsk-params">
+<legend>FSK burst</legend>
+
+<div class="field">
+  <label for="fsk-beeps">Beeps per burst</label>
+  <input type="number" id="fsk-beeps" value="3" min="1" max="20" oninput="updatePreview()">
+</div>
+<div class="field checkbox-field">
+  <label style="min-width:170px">Power ramp</label>
+  <label><input type="checkbox" id="fsk-h2l" checked onchange="updatePreview()"> Loudest beep first</label>
+</div>
+<div class="field">
+  <label for="fsk-on">Beep duration</label>
+  <input type="number" id="fsk-on" value="200" min="10" max="5000" step="10" oninput="updatePreview()">
+  <span class="unit">ms</span>
+</div>
+<div class="field">
+  <label for="fsk-off">Gap between beeps</label>
+  <input type="number" id="fsk-off" value="200" min="10" max="5000" step="10" oninput="updatePreview()">
+  <span class="unit">ms</span>
+</div>
+<div class="field checkbox-field">
+  <label style="min-width:170px">Tone arpeggio</label>
+  <label><input type="checkbox" id="fsk-arp" onchange="updatePreview()"> Step the tone up each beep</label>
+</div>
+<div class="field">
+  <label for="fsk-tone">Audio tone (base)</label>
+  <input type="number" id="fsk-tone" value="200" min="100" max="5000" step="10" oninput="updatePreview()">
+  <span class="unit">Hz</span>
+  <span class="hint">Constant tone for all beeps, or the starting tone when arpeggio is on (then it steps up x1, x1.25, x1.5 and jumps an octave every three beeps).</span>
+</div>
+</fieldset>
+
+<fieldset id="cw-params">
+<legend>CW burst</legend>
+
+<div class="field">
+  <label for="cw-beeps">Beeps per burst</label>
+  <input type="number" id="cw-beeps" value="4" min="1" max="20" oninput="updatePreview()">
+</div>
+<div class="field checkbox-field">
+  <label style="min-width:170px">Power ramp</label>
+  <label><input type="checkbox" id="cw-h2l" checked onchange="updatePreview()"> Loudest beep first</label>
+</div>
+<div class="field">
+  <label for="cw-on">Beep duration</label>
+  <input type="number" id="cw-on" value="40" min="5" max="5000" step="5" oninput="updatePreview()">
+  <span class="unit">ms</span>
+  <span class="hint">CW beeps can be much shorter than FSK, saving power.</span>
+</div>
+<div class="field">
+  <label for="cw-off">Gap between beeps</label>
+  <input type="number" id="cw-off" value="40" min="5" max="5000" step="5" oninput="updatePreview()">
+  <span class="unit">ms</span>
+</div>
+<div class="field">
+  <label for="cw-offset">Per-beep pitch step</label>
+  <input type="number" id="cw-offset" value="150" min="0" max="2000" step="10">
+  <span class="unit">Hz</span>
+  <span class="hint">Each CW beep shifts up by this much, so beeps have distinct pitches on an SSB/CW receiver.</span>
+</div>
+</fieldset>
+
+<fieldset>
+<legend>Burst &amp; startup timing</legend>
+
+<div class="field">
+  <label for="burst-period">Burst period</label>
+  <input type="number" id="burst-period" value="2000" min="500" max="60000" step="100" oninput="updatePreview()">
+  <span class="unit">ms</span>
+  <span class="hint">Time from the start of one burst to the start of the next (2000&nbsp;ms = every 2&nbsp;seconds).</span>
+</div>
+
+<div class="field">
+  <label for="startup-delay">Startup delay</label>
+  <input type="number" id="startup-delay" value="500" min="0" max="30000" step="100">
+  <span class="unit">ms</span>
+  <span class="hint">Gap on power-on before the first burst. 500&nbsp;ms is fine on external power; a few seconds is safer on a CR2032.</span>
+</div>
+
+<div class="row">
+  <strong>Burst preview</strong>
+  <div id="preview" style="margin-top:0.4rem"></div>
+</div>
+</fieldset>
+
+<fieldset>
+<legend>Callsign identification</legend>
+
+<div class="field">
+  <label for="callsign">Callsign</label>
+  <input type="text" id="callsign" value="" maxlength="11" placeholder="e.g. AB0CDE"
+         oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9\/]/g,'');onCallsignChange()">
+  <span class="hint">Your assigned amateur radio callsign. A&ndash;Z, 0&ndash;9, optional /suffix.</span>
+  <div id="callsign-msg" class="msg"></div>
+</div>
+
+<div class="field checkbox-field">
+  <label><input type="checkbox" id="use-morse" checked onchange="onMorseToggle()"> Send periodic morse callsign ID</label>
+</div>
+
+<div class="field" id="id-period-field">
+  <label for="id-period">ID interval</label>
+  <input type="number" id="id-period" value="10" min="1" max="10" step="1" oninput="updatePreview()">
+  <span class="unit">minutes</span>
+  <span class="hint">The callsign has its own schedule, separate from the bursts, and is sent at the first gap after the interval
+  elapses (never mid-burst). In the US, FCC &sect;97.119 requires ID at least every 10&nbsp;minutes, so set this slightly
+  under 10 if you want margin. The ID transmits at max power, in CW for CW/Both modes.</span>
+</div>
+</fieldset>
+
+<!-- ===================== STEP 2: FLASH / DOWNLOAD ===================== -->
+<h2>2. Flash or download</h2>
+
+<div id="fw-status" class="notice">Loading firmware&hellip;</div>
+
+<details>
+<summary>Firmware source &amp; build notes (for the maintainer)</summary>
+
+<p style="font-size:0.85rem;color:#555">
+The base binary is built once from the rocketbeacon source with a patchable config block (config <b>version 4</b>),
+then committed to <span class="mono">firmware/rocketbeacon.bin</span> in this repository. This tool fetches it, patches
+your settings in, and recomputes the checksum &mdash; visitors never compile or upload anything.
+</p>
+
+<p style="font-size:0.85rem;color:#555">
+Four files make up the firmware change: <span class="mono">beacon_config.h</span>, <span class="mono">beacon_config.c</span>,
+a linker-script section, and the edits to <span class="mono">main.c</span>. The full <span class="mono">beacon_config.h</span>,
+<span class="mono">beacon_config.c</span>, and <span class="mono">main.c</span> are provided alongside this tool; the
+config struct and linker section are summarised below.
+</p>
+
+<h3>Config struct (72 bytes, version 4)</h3>
+<pre class="code" id="code-struct"></pre>
+
+<h3>Linker script (<span class="mono">STM32WLE5CBU6_FLASH.ld</span>, inside <span class="mono">SECTIONS</span>)</h3>
+<pre class="code" id="code-ld"></pre>
+
+<p style="font-size:0.85rem;color:#555">
+Build with the binary (<span class="mono">.bin</span>) output enabled. Recommended: add
+<span class="mono">--gap-fill 0xFF</span> to the objcopy step so blank regions stay erased. The tool also skips
+all-<span class="mono">0xFF</span> regions automatically.
+</p>
+
+<h3>Use a different binary (optional)</h3>
+<p style="font-size:0.85rem;color:#555">If auto-loading fails (e.g. opening this file locally), load a <span class="mono">.bin</span> manually:</p>
+<div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+  <input type="file" id="file-input" accept=".bin" onchange="loadFile(this.files[0])">
+  Drop a <span class="mono">.bin</span> here, or click to browse.
+</div>
+</details>
+
+<div id="flash-controls" class="hidden">
+
+  <h3>Download patched binary</h3>
+  <p class="subtitle">Save the <span class="mono">.bin</span> and flash it yourself with STM32CubeProg or stm32flash.</p>
+  <button id="btn-download" onclick="downloadBin()" disabled>Download .bin</button>
+
+  <hr>
+
+  <h3>Flash over serial (Chrome / Edge only)</h3>
+  <p class="subtitle">
+    Flash directly through a USB&rarr;UART adapter. Put the beacon in bootloader mode first:
+    hold the button while connecting power &mdash; the LED stays solidly ON.
+  </p>
+
+  <div class="notice">
+    <strong>Wiring &amp; mode:</strong> adapter TX&rarr;beacon RX, RX&rarr;beacon TX, GND&rarr;GND, VCC&rarr;V+.
+    Bootloader uses 8E1 (even parity). Default 57600 baud.
+  </div>
+
+  <div class="field">
+    <label for="baud">Baud rate</label>
+    <select id="baud">
+      <option value="57600" selected>57600</option>
+      <option value="115200">115200</option>
+      <option value="9600">9600</option>
+    </select>
+  </div>
+
+  <div class="row">Status: <span id="conn-status">not connected</span></div>
+
+  <div class="row">
+    <button id="btn-connect" onclick="connectSerial()">Connect</button>
+    <button id="btn-disconnect" onclick="disconnectSerial()" disabled>Disconnect</button>
+    <button id="btn-flash" onclick="doFlash()" disabled>Erase &amp; flash</button>
+  </div>
+
+  <div id="progress-row" class="row hidden">
+    <progress id="flash-progress" value="0" max="100"></progress>
+    <span id="flash-pct" class="mono">0%</span>
+  </div>
+
+  <div id="log"><span style="color:#777">Serial log appears here.</span></div>
+</div>
+
+<hr>
+<p class="footer">
+For <a href="https://github.com/ElvinC/rocketbeacon">ElvinC/rocketbeacon</a> · STM32WLE5 ·
+approach inspired by <a href="https://github.com/whosmatt/uvmod">whosmatt/uvmod</a>.
+Web Serial flashing requires a Chromium-based browser.
+</p>
+
+<script>
+/* =========================================================================
+   Config block (72 bytes, packed). Magic "BCON". Version 4.
+     0  magic[4]
+     4  rf_freq_hz        u32     center frequency in Hz
+     8  max_power_dbm     i8      top of the power ramp
+     9  mode              u8      0=FSK 1=CW 2=both
+    10  use_morse         u8
+    11  fsk_num_beeps     u8
+    12  fsk_high2low      u8
+    13  cw_num_beeps      u8
+    14  cw_high2low       u8
+    15  fsk_arpeggio      u8      1 = step FSK tone up each beep
+    16  fsk_tone_hz       u32     base / starting tone
+    20  fsk_on_ms         u32
+    24  fsk_off_ms        u32
+    28  cw_on_ms          u32
+    32  cw_off_ms         u32
+    36  cw_offset_hz      u32
+    40  burst_period_ms   u32
+    44  startup_delay_ms  u32
+    48  id_period_ms      u32
+    52  callsign[12]
+    64  config_version    u32 = 4
+    68  checksum          u32 = XOR of the 17 words at bytes 0..67
+   ========================================================================= */
+const MAGIC = [0x42, 0x43, 0x4F, 0x4E];
+const CONFIG_SIZE = 72;
+const CONFIG_VERSION = 4;
+const FIRMWARE_URL = './firmware/rocketbeacon.bin';
+
+const CALLSIGN_RE = /^[A-Z0-9]{1,2}[0-9][A-Z]{1,4}(\/[A-Z0-9]{1,4})?$/;
+
+const BANDS = {
+  '440': { usa: [420, 450], r1: [430, 440], r2: [430, 440], r3: [430, 440] },
+  '220': { usa: [222, 225], r1: null,       r2: [220, 225], r3: null }
+};
+const BAND_DEFAULT = { '440': 433.225, '220': 223.500 };
+const REGION_LABEL = { usa: 'USA', r1: 'ITU Region 1', r2: 'ITU Region 2', r3: 'ITU Region 3' };
+
+let firmwareData = null;
+let configOffset = -1;
+let firmwareReady = false;
+let serialConnected = false;
+let serialPort = null;
+let byteStream = null;
+
+/* ---- checksum ---- */
+function xorChecksum(data, off) {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let x = 0;
+  for (let i = 0; i < 17; i++) x ^= view.getUint32(off + i * 4, true);
+  return x >>> 0;
+}
+
+/* ---- find / write ---- */
+function findConfig(data) {
+  for (let i = 0; i <= data.length - CONFIG_SIZE; i++) {
+    if (data[i] === MAGIC[0] && data[i+1] === MAGIC[1] &&
+        data[i+2] === MAGIC[2] && data[i+3] === MAGIC[3]) return i;
+  }
+  return -1;
+}
+function readVersion(data, b) {
+  return new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(b + 64, true);
+}
+function writeConfig(data, b, cfg) {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  data[b] = MAGIC[0]; data[b+1] = MAGIC[1]; data[b+2] = MAGIC[2]; data[b+3] = MAGIC[3];
+  view.setUint32(b + 4, cfg.rf_freq_hz >>> 0, true);
+  view.setInt8(b + 8, cfg.max_power_dbm);
+  data[b + 9]  = cfg.mode & 0xFF;
+  data[b + 10] = cfg.use_morse ? 1 : 0;
+  data[b + 11] = cfg.fsk_num_beeps & 0xFF;
+  data[b + 12] = cfg.fsk_high2low ? 1 : 0;
+  data[b + 13] = cfg.cw_num_beeps & 0xFF;
+  data[b + 14] = cfg.cw_high2low ? 1 : 0;
+  data[b + 15] = cfg.fsk_arpeggio ? 1 : 0;
+  view.setUint32(b + 16, cfg.fsk_tone_hz >>> 0, true);
+  view.setUint32(b + 20, cfg.fsk_on_ms >>> 0, true);
+  view.setUint32(b + 24, cfg.fsk_off_ms >>> 0, true);
+  view.setUint32(b + 28, cfg.cw_on_ms >>> 0, true);
+  view.setUint32(b + 32, cfg.cw_off_ms >>> 0, true);
+  view.setUint32(b + 36, cfg.cw_offset_hz >>> 0, true);
+  view.setUint32(b + 40, cfg.burst_period_ms >>> 0, true);
+  view.setUint32(b + 44, cfg.startup_delay_ms >>> 0, true);
+  view.setUint32(b + 48, cfg.id_period_ms >>> 0, true);
+  const cs = (cfg.callsign || '').substring(0, 11);
+  for (let i = 0; i < 12; i++) data[b + 52 + i] = i < cs.length ? cs.charCodeAt(i) : 0;
+  view.setUint32(b + 64, CONFIG_VERSION, true);
+  view.setUint32(b + 68, 0, true);
+  view.setUint32(b + 68, xorChecksum(data, b), true);
+}
+
+/* ---- selections ---- */
+function getRegion() { return document.querySelector('input[name="region"]:checked').value; }
+function getBand()   { return document.querySelector('input[name="band"]:checked').value; }
+function getMode() {
+  const v = document.querySelector('input[name="mode"]:checked').value;
+  return v === 'cw' ? 1 : v === 'both' ? 2 : 0;
+}
+function currentRange() { return BANDS[getBand()][getRegion()]; }
+
+function intOf(id, dflt) { const v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? dflt : v; }
+
+function readUIConfig() {
+  const freqMhz = parseFloat(document.getElementById('rf-freq').value) || 433.225;
+  const idMin = parseFloat(document.getElementById('id-period').value) || 10;
+  return {
+    rf_freq_hz:       Math.round(freqMhz * 1e6),
+    max_power_dbm:    intOf('tx-power', 14),
+    mode:             getMode(),
+    use_morse:        document.getElementById('use-morse').checked ? 1 : 0,
+    fsk_num_beeps:    intOf('fsk-beeps', 3),
+    fsk_high2low:     document.getElementById('fsk-h2l').checked ? 1 : 0,
+    fsk_arpeggio:     document.getElementById('fsk-arp').checked ? 1 : 0,
+    fsk_tone_hz:      intOf('fsk-tone', 200),
+    fsk_on_ms:        intOf('fsk-on', 200),
+    fsk_off_ms:       intOf('fsk-off', 200),
+    cw_num_beeps:     intOf('cw-beeps', 4),
+    cw_high2low:      document.getElementById('cw-h2l').checked ? 1 : 0,
+    cw_on_ms:         intOf('cw-on', 40),
+    cw_off_ms:        intOf('cw-off', 40),
+    cw_offset_hz:     intOf('cw-offset', 150),
+    burst_period_ms:  intOf('burst-period', 2000),
+    startup_delay_ms: intOf('startup-delay', 500),
+    id_period_ms:     Math.round(idMin * 60000),
+    callsign:         (document.getElementById('callsign').value || '').toUpperCase().trim(),
+  };
+}
+
+/* ---- power ramp (matches the firmware integer math) ---- */
+function buildRamp(count, maxPower, high2low) {
+  const out = new Array(count);
+  const step = count > 1 ? Math.trunc((maxPower + 9) / (count - 1)) : 0;
+  for (let j = 0; j < count; j++) {
+    const p = maxPower - step * j;          // descending: maxPower .. -9
+    if (high2low) out[j] = p; else out[count - 1 - j] = p;
+  }
+  return out;
+}
+
+/* ---- FSK arpeggio tones (matches the firmware) ---- */
+function fskToneSeq(count, base, arpeggio) {
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    if (arpeggio) {
+      const grp = Math.floor(i / 3);
+      const within = i - 3 * grp;
+      out.push(Math.round(base * (1 + 0.25 * within) * (1 << grp)));
+    } else {
+      out.push(base);
+    }
+  }
+  return out;
+}
+
+/* ---- band / frequency validation ---- */
+function updateBandLimits() {
+  const range = currentRange();
+  const bandLabel = getBand() === '220' ? '1.25 m (220 MHz)' : '70 cm (440 MHz)';
+  const freqEl = document.getElementById('rf-freq');
+  const bandMsg = document.getElementById('band-msg');
+
+  if (!range) {
+    freqEl.disabled = true;
+    bandMsg.className = 'msg bad';
+    bandMsg.style.marginLeft = '0';
+    bandMsg.textContent = bandLabel + ' is not allocated to amateur radio in ' + REGION_LABEL[getRegion()] +
+      '. Choose the 440 MHz band, or a region where 1.25 m is allocated (Region 2 / USA).';
+    document.getElementById('freq-msg').textContent = '';
+  } else {
+    freqEl.disabled = false;
+    freqEl.min = range[0];
+    freqEl.max = range[1];
+    let v = parseFloat(freqEl.value);
+    if (isNaN(v) || v < range[0] || v > range[1]) {
+      v = BAND_DEFAULT[getBand()];
+      if (v < range[0] || v > range[1]) v = (range[0] + range[1]) / 2;
+      freqEl.value = v.toFixed(3);
+    }
+    bandMsg.className = 'msg';
+    bandMsg.style.marginLeft = '0';
+    bandMsg.textContent = 'Allowed range: ' + range[0].toFixed(3) + '\u2013' + range[1].toFixed(3) +
+      ' MHz (' + bandLabel + ', ' + REGION_LABEL[getRegion()] + ').';
+  }
+  validateFreq();
+}
+
+function freqStatus() {
+  const range = currentRange();
+  if (!range) return { ok: false, msg: '' };
+  const v = parseFloat(document.getElementById('rf-freq').value);
+  if (isNaN(v)) return { ok: false, msg: 'Enter a frequency.' };
+  if (v < range[0] || v > range[1])
+    return { ok: false, msg: 'Outside the allowed band (' + range[0] + '\u2013' + range[1] + ' MHz).' };
+  return { ok: true, msg: '' };
+}
+function validateFreq() {
+  const st = freqStatus();
+  const el = document.getElementById('freq-msg');
+  el.textContent = st.msg;
+  el.className = st.ok ? 'msg' : 'msg bad';
+  syncButtons();
+}
+
+/* ---- callsign validation ---- */
+function callsignStatus(raw) {
+  const cs = (raw || '').toUpperCase().trim();
+  if (!cs) return { ok: false, msg: 'Enter your amateur radio callsign.' };
+  if (cs === 'N0CALL') return { ok: false, msg: 'N0CALL is a placeholder \u2014 enter your own callsign.' };
+  if (!CALLSIGN_RE.test(cs)) return { ok: false, msg: 'Does not match an amateur callsign format (e.g. AB0CDE).' };
+  return { ok: true, msg: 'Valid callsign format.' };
+}
+function onCallsignChange() {
+  const st = callsignStatus(document.getElementById('callsign').value);
+  const el = document.getElementById('callsign-msg');
+  el.textContent = document.getElementById('callsign').value ? st.msg : '';
+  el.className = st.ok ? 'msg ok' : 'msg bad';
+  syncButtons();
+}
+
+/* ---- mode / morse handlers ---- */
+function onModeChange() {
+  const m = getMode();
+  document.getElementById('fsk-params').classList.toggle('hidden', m === 1); // hide for CW-only
+  document.getElementById('cw-params').classList.toggle('hidden', m === 0);  // hide for FSK-only
+  updatePreview();
+}
+function onMorseToggle() {
+  document.getElementById('id-period-field').classList.toggle('hidden', !document.getElementById('use-morse').checked);
+  updatePreview();
+}
+document.getElementById('tx-power').addEventListener('input', function () {
+  document.getElementById('tx-power-val').textContent = this.value + ' dBm';
+  updatePreview();
+});
+
+function syncButtons() {
+  const ready = firmwareReady &&
+                callsignStatus(document.getElementById('callsign').value).ok &&
+                freqStatus().ok;
+  document.getElementById('btn-download').disabled = !ready;
+  document.getElementById('btn-flash').disabled = !ready || !serialConnected;
+}
+
+/* ---- preview ---- */
+function modeLine(label, count, onMs, offMs, periodMs, powers, tones) {
+  const COLS = 54;
+  const cells = new Array(COLS).fill(' ');
+  let t = 0;
+  for (let i = 0; i < count; i++) {
+    const a = Math.floor(t / periodMs * COLS);
+    const b = Math.max(a + 1, Math.round((t + onMs) / periodMs * COLS));
+    for (let k = a; k < b && k < COLS; k++) cells[k] = '#';
+    t += onMs;
+    if (i < count - 1) t += offMs;
+  }
+  const burst = count * onMs + (count - 1) * offMs;
+  let line = label + ' |' + cells.join('') + '|';
+  line += '\n     ' + count + ' \u00d7 ' + onMs + ' ms, gap ' + offMs + ' ms';
+  line += '   powers: ' + powers.join(', ') + ' dBm';
+  if (tones) line += '\n     tones: ' + tones.join(', ') + ' Hz';
+  if (burst > periodMs) line += '\n     \u2014 burst exceeds the period!';
+  return line;
+}
+
+function updatePreview() {
+  const m = getMode();
+  const maxPower = intOf('tx-power', 14);
+  const period = intOf('burst-period', 2000);
+  const lines = [];
+
+  if (m === 0 || m === 2) {
+    const c = intOf('fsk-beeps', 3);
+    const arp = document.getElementById('fsk-arp').checked;
+    const tones = fskToneSeq(c, intOf('fsk-tone', 200), arp);
+    lines.push(modeLine('FSK', c, intOf('fsk-on', 200), intOf('fsk-off', 200), period,
+                        buildRamp(c, maxPower, document.getElementById('fsk-h2l').checked),
+                        arp ? tones : null));
+  }
+  if (m === 1 || m === 2) {
+    const c = intOf('cw-beeps', 4);
+    lines.push(modeLine('CW ', c, intOf('cw-on', 40), intOf('cw-off', 40), period,
+                        buildRamp(c, maxPower, document.getElementById('cw-h2l').checked), null));
+  }
+  if (m === 2) lines.push('(bursts alternate FSK, CW, FSK, \u2026 every ' + period + ' ms)');
+
+  if (document.getElementById('use-morse').checked) {
+    const idMin = parseFloat(document.getElementById('id-period').value) || 10;
+    lines.push('Callsign ID every ' + idMin + ' min, at max power' + (m === 0 ? ', FSK' : ', CW'));
+  } else {
+    lines.push('Callsign ID: off');
+  }
+  document.getElementById('preview').textContent = lines.join('\n');
+}
+
+/* ---- firmware loading ---- */
+async function initFirmware() {
+  try {
+    const r = await fetch(FIRMWARE_URL, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const buf = await r.arrayBuffer();
+    acceptFirmware(new Uint8Array(buf), FIRMWARE_URL.split('/').pop());
+  } catch (e) {
+    firmwareReady = false;
+    document.getElementById('fw-status').innerHTML =
+      '<span class="bad">Could not auto-load firmware (' + e.message + ').</span> ' +
+      'Open the "Firmware source" section below to load a binary manually.';
+    document.getElementById('flash-controls').classList.add('hidden');
+  }
+}
+function loadFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => acceptFirmware(new Uint8Array(e.target.result), file.name);
+  reader.readAsArrayBuffer(file);
+}
+function acceptFirmware(data, name) {
+  firmwareData = data;
+  configOffset = findConfig(data);
+  const statusEl = document.getElementById('fw-status');
+
+  if (configOffset < 0) {
+    firmwareReady = false;
+    statusEl.innerHTML = '<span class="bad">No "BCON" config block found in ' + name + '.</span> ' +
+      'Rebuild the firmware with the config block (see the section below).';
+    document.getElementById('flash-controls').classList.add('hidden');
+    syncButtons();
+    return;
+  }
+  const ver = readVersion(data, configOffset);
+  if (ver !== CONFIG_VERSION) {
+    firmwareReady = false;
+    statusEl.innerHTML = '<span class="bad">Config block version ' + ver + ' found, but this tool expects version ' +
+      CONFIG_VERSION + '.</span> Rebuild the firmware with the current beacon_config files.';
+    document.getElementById('flash-controls').classList.add('hidden');
+    syncButtons();
+    return;
+  }
+  firmwareReady = true;
+  const kb = (data.length / 1024).toFixed(1);
+  statusEl.innerHTML = '<span class="ok">Firmware ready:</span> ' + name + ' (' + kb +
+    ' KB, config v' + ver + '). Set your options above, then download or flash below.';
+  document.getElementById('flash-controls').classList.remove('hidden');
+  syncButtons();
+}
+
+/* ---- patched binary ---- */
+function buildPatched() {
+  const data = firmwareData.slice();
+  writeConfig(data, configOffset, readUIConfig());
+  return data;
+}
+function downloadBin() {
+  if (!firmwareReady) return;
+  const cfg = readUIConfig();
+  const blob = new Blob([buildPatched()], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rocketbeacon_' + cfg.callsign.replace('/', '-') + '_' + (cfg.rf_freq_hz / 1e6).toFixed(3) + 'MHz.bin';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* =========================================================================
+   STM32 UART bootloader (AN3155)
+   ========================================================================= */
+class ByteStream {
+  constructor(port) { this.port = port; this.queue = []; this.waiters = []; this.reader = null; this.writer = null; }
+  async open(baudRate) {
+    await this.port.open({ baudRate, dataBits: 8, parity: 'even', stopBits: 1 });
+    this.reader = this.port.readable.getReader();
+    this.writer = this.port.writable.getWriter();
+    this._pump();
+  }
+  async _pump() {
+    try {
+      for (;;) {
+        const { value, done } = await this.reader.read();
+        if (done) break;
+        for (const byte of value) {
+          if (this.waiters.length) this.waiters.shift()(byte);
+          else this.queue.push(byte);
+        }
+      }
+    } catch (e) { /* closed */ }
+  }
+  readByte(timeoutMs = 3000) {
+    if (this.queue.length) return Promise.resolve(this.queue.shift());
+    return new Promise((resolve, reject) => {
+      const resolver = (b) => { clearTimeout(timer); resolve(b); };
+      const timer = setTimeout(() => {
+        const i = this.waiters.indexOf(resolver);
+        if (i !== -1) this.waiters.splice(i, 1);
+        reject(new Error('serial timeout (' + timeoutMs + ' ms)'));
+      }, timeoutMs);
+      this.waiters.push(resolver);
+    });
+  }
+  async write(arr) { await this.writer.write(arr instanceof Uint8Array ? arr : new Uint8Array(arr)); }
+  async close() {
+    try { await this.reader.cancel(); } catch (e) {}
+    try { this.reader.releaseLock(); } catch (e) {}
+    try { this.writer.releaseLock(); } catch (e) {}
+    try { await this.port.close(); } catch (e) {}
+  }
+}
+
+class STM32Boot {
+  static ACK = 0x79;
+  static NACK = 0x1F;
+  static FLASH = 0x08000000;
+  constructor(stream) { this.s = stream; }
+  async waitACK(ms = 3000) {
+    const b = await this.s.readByte(ms);
+    if (b === STM32Boot.ACK) return;
+    if (b === STM32Boot.NACK) throw new Error('device sent NACK');
+    throw new Error('expected ACK, got 0x' + b.toString(16));
+  }
+  async sync() {
+    await this.s.write([0x7F]);
+    let b;
+    try { b = await this.s.readByte(3000); }
+    catch (e) { throw new Error('no response \u2014 check wiring, 8E1 parity, and bootloader mode'); }
+    if (b === STM32Boot.NACK) return;
+    if (b !== STM32Boot.ACK) throw new Error('sync failed (0x' + b.toString(16) + '); try power-cycling');
+  }
+  async eraseAll(log) {
+    log && log('erasing flash...');
+    await this.s.write([0x44, 0xBB]);
+    await this.waitACK(2000);
+    await this.s.write([0xFF, 0xFF, 0x00]);
+    await this.waitACK(30000);
+    log && log('erase complete');
+  }
+  async writeChunk(address, chunk) {
+    while (chunk.length % 8 !== 0) chunk.push(0xFF);
+    await this.s.write([0x31, 0xCE]);
+    await this.waitACK();
+    const a = [(address >>> 24) & 0xFF, (address >>> 16) & 0xFF, (address >>> 8) & 0xFF, address & 0xFF];
+    await this.s.write([...a, a[0] ^ a[1] ^ a[2] ^ a[3]]);
+    await this.waitACK();
+    const n = chunk.length;
+    let chk = n - 1;
+    for (const v of chunk) chk ^= v;
+    await this.s.write([n - 1, ...chunk, chk]);
+    await this.waitACK(5000);
+  }
+  async flash(firmware, cb) {
+    const CHUNK = 256;
+    let written = 0, skipped = 0;
+    for (let off = 0; off < firmware.length; off += CHUNK) {
+      const slice = firmware.slice(off, Math.min(off + CHUNK, firmware.length));
+      if (slice.every(v => v === 0xFF)) { skipped += slice.length; continue; }
+      await this.writeChunk(STM32Boot.FLASH + off, Array.from(slice));
+      written += slice.length;
+      cb && cb(Math.round((off + slice.length) / firmware.length * 100), written, skipped);
+    }
+    return { written, skipped };
+  }
+}
+
+/* ---- serial UI ---- */
+function log(msg, cls) {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function setStatus(t) { document.getElementById('conn-status').textContent = t; }
+
+async function connectSerial() {
+  if (!navigator.serial) { alert('Web Serial is not supported. Use Chrome or Edge.'); return; }
+  try {
+    serialPort = await navigator.serial.requestPort();
+    const baud = parseInt(document.getElementById('baud').value, 10);
+    byteStream = new ByteStream(serialPort);
+    await byteStream.open(baud);
+    serialConnected = true;
+    log('port opened at ' + baud + ' baud, 8E1');
+    setStatus('connected');
+    log('syncing with bootloader...');
+    try {
+      await new STM32Boot(byteStream).sync();
+      log('bootloader responded \u2014 ready', 's');
+    } catch (e) {
+      log(e.message, 'e');
+      log('is the beacon in bootloader mode (LED solid ON)?', 'e');
+    }
+    document.getElementById('btn-connect').disabled = true;
+    document.getElementById('btn-disconnect').disabled = false;
+    syncButtons();
+  } catch (e) {
+    log('connect error: ' + e.message, 'e');
+  }
+}
+async function disconnectSerial() {
+  if (byteStream) { await byteStream.close(); byteStream = null; }
+  serialPort = null;
+  serialConnected = false;
+  setStatus('not connected');
+  document.getElementById('btn-connect').disabled = false;
+  document.getElementById('btn-disconnect').disabled = true;
+  syncButtons();
+  log('disconnected');
+}
+async function doFlash() {
+  if (!firmwareReady || !byteStream) return;
+  if (!callsignStatus(document.getElementById('callsign').value).ok || !freqStatus().ok) return;
+  const data = buildPatched();
+  const boot = new STM32Boot(byteStream);
+
+  document.getElementById('btn-flash').disabled = true;
+  document.getElementById('btn-connect').disabled = true;
+  document.getElementById('btn-disconnect').disabled = true;
+  document.getElementById('progress-row').classList.remove('hidden');
+  setStatus('flashing...');
+
+  try {
+    await boot.sync();
+    await boot.eraseAll(m => log(m));
+    log('writing ' + data.length + ' bytes...');
+    const res = await boot.flash(data, (pct, written) => {
+      document.getElementById('flash-progress').value = pct;
+      document.getElementById('flash-pct').textContent = pct + '%';
+      if (pct % 20 === 0) log('  ' + written + ' bytes written...');
+    });
+    log('done: wrote ' + res.written + ' bytes, skipped ' + res.skipped + ' blank bytes', 's');
+    log('power-cycle the beacon to run the new firmware.', 's');
+    setStatus('connected');
+  } catch (e) {
+    log('flash failed: ' + e.message, 'e');
+    setStatus('connected');
+  } finally {
+    document.getElementById('btn-connect').disabled = true;
+    document.getElementById('btn-disconnect').disabled = false;
+    syncButtons();
+  }
+}
+
+/* ---- drag & drop fallback ---- */
+(function () {
+  const z = document.getElementById('dropzone');
+  z.addEventListener('dragover', e => { e.preventDefault(); z.classList.add('over'); });
+  z.addEventListener('dragleave', () => z.classList.remove('over'));
+  z.addEventListener('drop', e => {
+    e.preventDefault(); z.classList.remove('over');
+    if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+})();
+
+/* ---- reference snippets ---- */
+document.getElementById('code-struct').textContent =
+`typedef struct __attribute__((packed)) {
+    uint8_t  magic[4];          // {'B','C','O','N'}
+    uint32_t rf_freq_hz;        // e.g. 433225000
+    int8_t   max_power_dbm;     // top of the power ramp, -9..22
+    uint8_t  mode;              // 0=FSK, 1=CW, 2=both (alternate)
+    uint8_t  use_morse;
+    uint8_t  fsk_num_beeps;
+    uint8_t  fsk_high2low;      // 1 = loudest FSK beep first
+    uint8_t  cw_num_beeps;
+    uint8_t  cw_high2low;       // 1 = loudest CW beep first
+    uint8_t  fsk_arpeggio;      // 1 = step FSK tone up each beep
+    uint32_t fsk_tone_hz;       // base / starting tone
+    uint32_t fsk_on_ms;
+    uint32_t fsk_off_ms;
+    uint32_t cw_on_ms;
+    uint32_t cw_off_ms;
+    uint32_t cw_offset_hz;      // per-beep CW pitch step
+    uint32_t burst_period_ms;
+    uint32_t startup_delay_ms;
+    uint32_t id_period_ms;
+    char     callsign[12];
+    uint32_t config_version;    // = 4
+    uint32_t checksum;          // XOR of words 0..16
+} BeaconConfig;`;
+
+document.getElementById('code-ld').textContent =
+`.beacon_config 0x0801F800 :
+{
+    KEEP(*(.beacon_config))
+} > FLASH`;
+
+/* ---- init ---- */
+onModeChange();
+onMorseToggle();
+onCallsignChange();
+updateBandLimits();
+updatePreview();
+initFirmware();
+</script>
+</body>
+</html>
