@@ -143,7 +143,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 
 <div class="field">
   <label for="rf-freq">Center frequency</label>
-  <input type="number" id="rf-freq" value="433.225" step="0.001" oninput="validateFreq()">
+  <input type="number" id="rf-freq" value="435.000" step="0.001" oninput="validateFreq()">
   <span class="unit">MHz</span>
   <div id="freq-msg" class="msg"></div>
 </div>
@@ -274,7 +274,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
   <span class="unit">minutes</span>
   <span class="hint">The callsign has its own schedule, separate from the bursts, and is sent at the first gap after the interval
   elapses (never mid-burst). In the US, FCC &sect;97.119 requires ID at least every 10&nbsp;minutes, so set this slightly
-  under 10 if you want margin. The ID transmits at max power, in CW for CW/Both modes.</span>
+  under 10 if you want margin. The ID transmits at max power, in FM for FM/Both modes.</span>
 </div>
 </fieldset>
 
@@ -341,8 +341,8 @@ all-<span class="mono">0xFF</span> regions automatically.
   <div class="field">
     <label for="baud">Baud rate</label>
     <select id="baud">
-      <option value="57600" selected>57600</option>
-      <option value="115200">115200</option>
+      <option value="57600">57600</option>
+      <option value="115200" selected>115200</option>
       <option value="9600">9600</option>
     </select>
   </div>
