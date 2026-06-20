@@ -741,7 +741,7 @@ function downloadBin() {
    STM32 UART bootloader (AN3155)
    ========================================================================= */
 class ByteStream {
-  constructor(port) { this.port = port; this.queue = []; this.waiters = []; this.reader = null; this.writer = null; }
+  constructor(port) { this.port = port; this.queue = []; this.waiters = []; this.reader = null; this.writer = null; this.initialized = false; }
   async open(baudRate) {
     await this.port.open({ baudRate, dataBits: 8, parity: 'even', stopBits: 1 });
     this.reader = this.port.readable.getReader();
@@ -793,12 +793,21 @@ class STM32Boot {
     throw new Error('expected ACK, got 0x' + b.toString(16));
   }
   async sync() {
+    // The 0x7F auto-baud init byte is only valid ONCE per session. After the
+    // bootloader is initialized it treats 0x7F as a command opcode and waits
+    // for a second byte, which hangs. So init at most once and no-op after.
+    if (this.s.initialized) return;
     await this.s.write([0x7F]);
     let b;
     try { b = await this.s.readByte(3000); }
     catch (e) { throw new Error('no response \u2014 check wiring, 8E1 parity, and bootloader mode'); }
-    if (b === STM32Boot.NACK) return;
-    if (b !== STM32Boot.ACK) throw new Error('sync failed (0x' + b.toString(16) + '); try power-cycling');
+    if (b === STM32Boot.ACK || b === STM32Boot.NACK) {
+      // ACK = freshly initialized; NACK = was already initialized. Either way
+      // the bootloader is now ready for commands.
+      this.s.initialized = true;
+      return;
+    }
+    throw new Error('sync failed (0x' + b.toString(16) + '); try power-cycling');
   }
   async eraseAll(log) {
     log && log('erasing flash...');
