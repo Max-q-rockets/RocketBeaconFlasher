@@ -151,20 +151,19 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 <div class="field">
   <label for="tx-power">Max TX power</label>
   <input type="range" id="tx-power" min="-9" max="22" value="14" step="1">
-  <span class="rangeval" id="tx-power-val">14 dBm</span>
+  <span class="rangeval" id="tx-power-val">16 dBm</span>
   <span class="hint">Top of the power ramp. Each burst steps down from here toward &minus;9 dBm. &le;16 dBm recommended on a CR2032.</span>
 </div>
 
 <div class="field radio-row">
   <label style="min-width:170px">Transmission mode</label>
-  <label><input type="radio" name="mode" value="fsk" checked onchange="onModeChange()"> FSK (FM tone)</label>
-  <label><input type="radio" name="mode" value="cw" onchange="onModeChange()"> CW (carrier)</label>
+  <label><input type="radio" name="mode" value="cw" checked onchange="onModeChange()"> CW (carrier)</label>
+  <label><input type="radio" name="mode" value="fsk" onchange="onModeChange()"> FSK (FM tone)</label>
   <label><input type="radio" name="mode" value="both" onchange="onModeChange()"> Both (alternate)</label>
 </div>
 
 <div style="font-size:0.78rem;color:#666;margin-top:0.4rem">
-  Within a burst, the per-beep power ramps from max down to &minus;9 dBm. The quietest beeps fade out first as you move
-  away, so counting audible beeps gives a coarse range cue for direction finding.
+  Within a burst, the per-beep power ramps from max down to &minus;9 dBm. The quietest beeps fade out first as signal gets weaker, so counting audible beeps gives a coarse signal strength cue for direction finding.
 </div>
 </fieldset>
 
@@ -214,13 +213,13 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 </div>
 <div class="field">
   <label for="cw-on">Beep duration</label>
-  <input type="number" id="cw-on" value="40" min="5" max="5000" step="5" oninput="updatePreview()">
+  <input type="number" id="cw-on" value="12" min="5" max="5000" step="5" oninput="updatePreview()">
   <span class="unit">ms</span>
   <span class="hint">CW beeps can be much shorter than FSK, saving power.</span>
 </div>
 <div class="field">
   <label for="cw-off">Gap between beeps</label>
-  <input type="number" id="cw-off" value="40" min="5" max="5000" step="5" oninput="updatePreview()">
+  <input type="number" id="cw-off" value="50" min="5" max="5000" step="5" oninput="updatePreview()">
   <span class="unit">ms</span>
 </div>
 <div class="field">
