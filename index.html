@@ -29,7 +29,8 @@ legend { font-weight: bold; padding: 0 0.4rem; }
 .field { margin: 0.6rem 0; }
 .field > label { display: inline-block; min-width: 170px; vertical-align: top; }
 .field .hint { display: block; color: #555; font-size: 0.8rem; margin: 0.15rem 0 0 170px; }
-.radio-row label { min-width: 0 !important; margin-right: 1rem; white-space: nowrap; }
+.radio-row label { min-width: 0 !important; margin-right: 1rem; white-space: nowrap; display: inline-block; vertical-align: top; }
+.radio-row label small { display: block; color: #666; font-size: 0.78rem; }
 .checkbox-field label { min-width: 0 !important; }
 
 input[type=text], input[type=number], select {
@@ -120,9 +121,9 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 <div class="field radio-row">
   <label style="min-width:170px">Regulatory region</label>
   <label><input type="radio" name="region" value="usa" checked onchange="updateBandLimits()"> USA</label>
-  <label><input type="radio" name="region" value="r1" onchange="updateBandLimits()"> ITU Region 1</label>
-  <label><input type="radio" name="region" value="r2" onchange="updateBandLimits()"> ITU Region 2</label>
-  <label><input type="radio" name="region" value="r3" onchange="updateBandLimits()"> ITU Region 3</label>
+  <label><input type="radio" name="region" value="r1" onchange="updateBandLimits()"> ITU Region 1<small>(Europe & Africa)</small></label>
+  <label><input type="radio" name="region" value="r2" onchange="updateBandLimits()"> ITU Region 2<small>(the Americas)</small></label>
+  <label><input type="radio" name="region" value="r3" onchange="updateBandLimits()"> ITU Region 3<small>(Asia & Oceania)</small></label>
 </div>
 
 <div class="field radio-row">
