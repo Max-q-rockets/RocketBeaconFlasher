@@ -631,7 +631,18 @@ function syncButtons() {
 // stride, so equal-duration beeps render identically (slightly trading exact
 // cycle-proportionality for visual evenness). Bar height encodes power.
 function burstSvg(bursts, totalMs, dividers) {
-  const W = 600, H = 78, padL = 4, padR = 4, base = 62, topPad = 14;
+  // 1. Grab the container and calculate its exact inner content width
+  const previewEl = document.getElementById('preview');
+  let W = 600; // Fallback
+  if (previewEl) {
+    const style = window.getComputedStyle(previewEl);
+    const paddingL = parseFloat(style.paddingLeft) || 0;
+    const paddingR = parseFloat(style.paddingRight) || 0;
+    // Calculate exact width available for the SVG content
+    W = Math.max(300, Math.round(previewEl.clientWidth - paddingL - paddingR));
+  }
+
+  const H = 78, padL = 4, padR = 4, base = 62, topPad = 14;
   const plotW = W - padL - padR;
   const maxBarH = base - topPad;
   const minW = 3;
@@ -641,7 +652,7 @@ function burstSvg(bursts, totalMs, dividers) {
 
   const defs = '<defs><pattern id="fskhatch" width="5" height="5" patternUnits="userSpaceOnUse" ' +
                'patternTransform="rotate(45)"><rect width="5" height="5" fill="#ffffff"></rect>' +
-               '<rect width="2" height="5" fill="#555555"></rect></pattern></defs>';
+               '<rect width="2.5" height="5" fill="#555555"></rect></pattern></defs>';
 
   let body = '';
   if (dividers) for (const d of dividers) {
@@ -665,6 +676,8 @@ function burstSvg(bursts, totalMs, dividers) {
   }
   const baseline = '<line x1="' + padL + '" y1="' + base + '" x2="' + (W - padR) + '" y2="' + base +
                    '" stroke="#ccc" stroke-width="1" shape-rendering="crispEdges"></line>';
+  
+  // 2. Dynamically update the max-width style inline to match W
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMinYMid meet" ' +
          'style="display:block;max-width:' + W + 'px;height:auto;margin:0.2rem 0">' +
          defs + baseline + body + '</svg>';
