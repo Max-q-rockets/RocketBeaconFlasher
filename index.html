@@ -266,10 +266,6 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
   <div id="callsign-msg" class="msg"></div>
 </div>
 
-<div class="field checkbox-field">
-  <label><input type="checkbox" id="use-morse" checked onchange="onMorseToggle()"> Send periodic morse callsign ID</label>
-</div>
-
 <div class="field" id="id-period-field">
   <label for="id-period">ID interval</label>
   <input type="number" id="id-period" value="10" min="1" max="10" step="1" oninput="updatePreview()">
@@ -484,7 +480,7 @@ function readUIConfig() {
     rf_freq_hz:       Math.round(freqMhz * 1e6),
     max_power_dbm:    intOf('tx-power', 14),
     mode:             getMode(),
-    use_morse:        document.getElementById('use-morse').checked ? 1 : 0,
+    use_morse:        1,
     fsk_num_beeps:    intOf('fsk-beeps', 3),
     fsk_high2low:     document.getElementById('fsk-h2l').checked ? 1 : 0,
     fsk_arpeggio:     document.getElementById('fsk-arp').checked ? 1 : 0,
@@ -601,10 +597,7 @@ function onModeChange() {
   document.getElementById('cw-params').classList.toggle('hidden', m === 0);  // hide for FSK-only
   updatePreview();
 }
-function onMorseToggle() {
-  document.getElementById('id-period-field').classList.toggle('hidden', !document.getElementById('use-morse').checked);
-  updatePreview();
-}
+
 document.getElementById('tx-power').addEventListener('input', function () {
   document.getElementById('tx-power-val').textContent = this.value + ' dBm';
   updatePreview();
@@ -660,12 +653,8 @@ function updatePreview() {
   }
   if (m === 2) lines.push('(bursts alternate FSK, CW, FSK, \u2026 every ' + period + ' ms)');
 
-  if (document.getElementById('use-morse').checked) {
-    const idMin = parseFloat(document.getElementById('id-period').value) || 10;
-    lines.push('Callsign ID every ' + idMin + ' min, at max power' + (m === 0 ? ', FSK' : ', CW'));
-  } else {
-    lines.push('Callsign ID: off');
-  }
+  const idMin = parseFloat(document.getElementById('id-period').value) || 10;
+  lines.push('Callsign ID every ' + idMin + ' min, at max power' + (m === 0 ? ', FSK' : ', CW'));
   document.getElementById('preview').textContent = lines.join('\n');
 }
 
@@ -971,7 +960,6 @@ document.getElementById('code-ld').textContent =
 
 /* ---- init ---- */
 onModeChange();
-onMorseToggle();
 onCallsignChange();
 updateBandLimits();
 updatePreview();
