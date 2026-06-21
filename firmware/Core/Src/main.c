@@ -294,7 +294,7 @@ void play_morse_word(uint8_t* letters, uint8_t len, bool use_cw) {
 void build_power_ramp(int8_t *out, uint8_t count, int8_t maxPower, bool high2low) {
     int step = (count > 1) ? ((maxPower + 9) / (int)(count - 1)) : 0;
     for (uint8_t j = 0; j < count; j++) {
-        int8_t p = (int8_t)(maxPower - step * j);   // descending: maxPower .. -9
+    	int8_t p = (int8_t)(maxPower - lround((double)(maxPower + 9) * j / (count - 1)));   // descending: maxPower .. -9
         if (high2low) {
             out[j] = p;                              // loudest first
         } else {

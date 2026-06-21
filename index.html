@@ -252,6 +252,11 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 <div class="row">
   <strong>Burst preview</strong>
   <div id="preview" style="margin-top:0.4rem"></div>
+  <div style="margin-top:0.5rem">
+    <button type="button" onclick="playBurstPreview()">&#9654; Play burst audio</button>
+    <button type="button" onclick="stopAudio()">Stop</button>
+    <span style="color:#666;font-size:0.78rem;margin-left:0.4rem">Approximate sidetone; beep loudness follows the power ramp.</span>
+  </div>
 </div>
 </fieldset>
 
@@ -264,6 +269,13 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9\/]/g,'');onCallsignChange()">
   <span class="hint">Your assigned amateur radio callsign. A&ndash;Z, 0&ndash;9, optional /suffix.</span>
   <div id="callsign-msg" class="msg"></div>
+</div>
+
+<div class="field">
+  <label>Callsign audio</label>
+  <button type="button" onclick="playCallsignPreview()">&#9654; Play in morse</button>
+  <button type="button" onclick="stopAudio()">Stop</button>
+  <span style="color:#666;font-size:0.78rem;margin-left:0.4rem">Plays the entered callsign at the beacon's keying speed.</span>
 </div>
 
 <div class="field" id="id-period-field">
@@ -504,7 +516,7 @@ function buildRamp(count, maxPower, high2low) {
   const out = new Array(count);
   const step = count > 1 ? Math.trunc((maxPower + 9) / (count - 1)) : 0;
   for (let j = 0; j < count; j++) {
-    const p = maxPower - step * j;          // descending: maxPower .. -9
+    const p = Math.round(maxPower - (maxPower + 9) * j / (count - 1));          // descending: maxPower .. -9
     if (high2low) out[j] = p; else out[count - 1 - j] = p;
   }
   return out;
@@ -656,6 +668,161 @@ function updatePreview() {
   const idMin = parseFloat(document.getElementById('id-period').value) || 10;
   lines.push('Callsign ID every ' + idMin + ' min, at max power' + (m === 0 ? ', FSK' : ', CW'));
   document.getElementById('preview').textContent = lines.join('\n');
+}
+
+/* ---- audio preview (Web Audio API) ---- */
+const MORSE = {
+  A:'.-',   B:'-...', C:'-.-.', D:'-..',  E:'.',    F:'..-.', G:'--.',  H:'....',
+  I:'..',   J:'.---', K:'-.-',  L:'.-..', M:'--',   N:'-.',   O:'---',  P:'.--.',
+  Q:'--.-', R:'.-.',  S:'...',  T:'-',    U:'..-',  V:'...-', W:'.--',  X:'-..-',
+  Y:'-.--', Z:'--..',
+  '0':'-----','1':'.----','2':'..---','3':'...--','4':'....-',
+  '5':'.....','6':'-....','7':'--...','8':'---..','9':'----.',
+  '/':'-..-.'
+};
+
+let audioCtx = null;
+let audioNodes = [];
+let loopTimer = null;
+let loopState = null;     // { segments, cycleLen, nextTime } while looping
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function stopAudio() {
+  if (loopTimer !== null) { clearInterval(loopTimer); loopTimer = null; }
+  loopState = null;
+  audioNodes.forEach(n => { try { n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} });
+  audioNodes = [];
+}
+function clampFreq(f) { return Math.max(50, Math.min(6000, f)); }
+function powerAmp(p, maxPower) {
+  const span = (maxPower + 9) || 1;
+  const norm = Math.max(0, Math.min(1, (p + 9) / span));
+  return (0.12 + 0.88 * norm) * 0.3;        // gentle overall level
+}
+
+// Schedule one set of segments at an absolute context time (startAbs).
+function scheduleSegmentsAt(segments, startAbs) {
+  const ctx = getAudioCtx();
+  const env = 0.006;                         // click-free attack/release
+  for (const s of segments) {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = s.freq;
+    const st = startAbs + s.start;
+    const en = st + s.dur;
+    const ramp = Math.min(env, s.dur / 2);
+    g.gain.setValueAtTime(0, st);
+    g.gain.linearRampToValueAtTime(s.amp, st + ramp);
+    g.gain.setValueAtTime(s.amp, en - ramp);
+    g.gain.linearRampToValueAtTime(0, en);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(st);
+    osc.stop(en + 0.02);
+    audioNodes.push(osc);
+    osc.onended = () => {
+      const i = audioNodes.indexOf(osc);
+      if (i >= 0) audioNodes.splice(i, 1);
+      try { osc.disconnect(); g.disconnect(); } catch (e) {}
+    };
+  }
+}
+
+// Play a set of segments once (no repeat).
+function playOnce(segments) {
+  if (!segments.length) return;
+  const ctx = getAudioCtx();
+  stopAudio();
+  scheduleSegmentsAt(segments, ctx.currentTime + 0.06);
+}
+
+// Loop one cycle (segments relative to 0, total length cycleLenS) until stopped.
+function playLoop(segments, cycleLenS) {
+  if (!segments.length || cycleLenS <= 0) return;
+  const ctx = getAudioCtx();
+  stopAudio();
+  loopState = { segments, cycleLen: cycleLenS, nextTime: ctx.currentTime + 0.1 };
+  const LOOKAHEAD = 0.35;                     // schedule this far ahead, in seconds
+  const tick = () => {
+    if (!loopState) return;
+    while (loopState.nextTime < ctx.currentTime + LOOKAHEAD) {
+      scheduleSegmentsAt(loopState.segments, loopState.nextTime);
+      loopState.nextTime += loopState.cycleLen;
+    }
+  };
+  tick();
+  loopTimer = setInterval(tick, 120);
+}
+
+// Append one burst's beeps starting at startS; returns the time after the burst.
+function appendBurst(segments, startS, useCw) {
+  const maxPower = intOf('tx-power', 14);
+  let t = startS;
+  if (!useCw) {
+    const c = Math.max(1, intOf('fsk-beeps', 3));
+    const on = intOf('fsk-on', 200) / 1000;
+    const off = intOf('fsk-off', 200) / 1000;
+    const tones = fskToneSeq(c, intOf('fsk-tone', 200), document.getElementById('fsk-arp').checked);
+    const powers = buildRamp(c, maxPower, document.getElementById('fsk-h2l').checked);
+    for (let j = 0; j < c; j++) {
+      segments.push({ freq: clampFreq(tones[j]), start: t, dur: on, amp: powerAmp(powers[j], maxPower) });
+      t += on + (j < c - 1 ? off : 0);
+    }
+  } else {
+    const c = Math.max(1, intOf('cw-beeps', 4));
+    const on = intOf('cw-on', 40) / 1000;
+    const off = intOf('cw-off', 40) / 1000;
+    const offset = intOf('cw-offset', 150);
+    const powers = buildRamp(c, maxPower, document.getElementById('cw-h2l').checked);
+    for (let j = 0; j < c; j++) {           // 600 Hz base sidetone + per-beep pitch step
+      segments.push({ freq: clampFreq(600 + offset * j), start: t, dur: on, amp: powerAmp(powers[j], maxPower) });
+      t += on + (j < c - 1 ? off : 0);
+    }
+  }
+  return t;
+}
+
+function playBurstPreview() {
+  const m = getMode();
+  const period = intOf('burst-period', 2000) / 1000;
+  const segments = [];
+  let cycleLen;
+  if (m === 0) {
+    const end = appendBurst(segments, 0, false);
+    cycleLen = Math.max(period, end);
+  } else if (m === 1) {
+    const end = appendBurst(segments, 0, true);
+    cycleLen = Math.max(period, end);
+  } else {                                   // both: FSK in period 1, CW in period 2, then repeat
+    appendBurst(segments, 0, false);
+    const end = appendBurst(segments, period, true);
+    cycleLen = Math.max(2 * period, end);
+  }
+  playLoop(segments, cycleLen);
+}
+
+function playCallsignPreview() {
+  const cs = (document.getElementById('callsign').value || '').toUpperCase().trim();
+  if (!cs) return;
+  const unit = 0.07;                         // 70 ms, matches firmware morse_unit_ms
+  const freq = 600, amp = 0.28;
+  const segments = [];
+  let t = 0;
+  for (let ci = 0; ci < cs.length; ci++) {
+    const code = MORSE[cs[ci]];
+    if (!code) { t += 3 * unit; continue; }
+    for (let ei = 0; ei < code.length; ei++) {
+      const dur = (code[ei] === '-' ? 3 : 1) * unit;
+      segments.push({ freq, start: t, dur, amp });
+      t += dur + unit;                       // element + 1U intra-element gap
+    }
+    if (ci < cs.length - 1) t += 3 * unit;   // +3U => 4U between letters (firmware timing)
+  }
+  playOnce(segments);
 }
 
 /* ---- firmware loading ---- */

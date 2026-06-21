@@ -78,8 +78,8 @@ all: main-build
 main-build: rocketbeacon.elf secondary-outputs
 
 # Tool invocations
-rocketbeacon.elf rocketbeacon.map: $(OBJS) $(USER_OBJS) C:\Users\maxwe\Documents\rocketbeacon-main\Firmware\STM32WLE5CBUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-g++ -o "rocketbeacon.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\maxwe\Documents\rocketbeacon-main\Firmware\STM32WLE5CBUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="rocketbeacon.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+rocketbeacon.elf rocketbeacon.map: $(OBJS) $(USER_OBJS) D:\Rocketry\RocketBeaconFlasher\firmware\STM32WLE5CBUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-g++ -o "rocketbeacon.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\Rocketry\RocketBeaconFlasher\firmware\STM32WLE5CBUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="rocketbeacon.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
