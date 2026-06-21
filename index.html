@@ -178,7 +178,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 </div>
 <div class="field checkbox-field">
   <label style="min-width:170px">Power ramp</label>
-  <label><input type="checkbox" id="fsk-h2l" checked onchange="updatePreview()"> Loudest beep first</label>
+  <label><input type="checkbox" id="fsk-h2l" onchange="updatePreview()"> Loudest beep first</label>
 </div>
 <div class="field">
   <label for="fsk-on">Beep duration</label>
@@ -192,7 +192,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 </div>
 <div class="field checkbox-field">
   <label style="min-width:170px">Tone arpeggio</label>
-  <label><input type="checkbox" id="fsk-arp" onchange="updatePreview()"> Step the tone up each beep</label>
+  <label><input type="checkbox" id="fsk-arp" checked onchange="updatePreview()"> Step the tone up each beep</label>
 </div>
 <div class="field">
   <label for="fsk-tone">Audio tone (base)</label>
