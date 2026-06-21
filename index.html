@@ -237,24 +237,23 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 
 <div class="field">
   <label for="burst-period">Burst period</label>
-  <input type="number" id="burst-period" value="2000" min="500" max="60000" step="100" oninput="updatePreview()">
-  <span class="unit">ms</span>
-  <span class="hint">Time from the start of one burst to the start of the next (2000&nbsp;ms = every 2&nbsp;seconds).</span>
+  <input type="number" id="burst-period" value="2.0" min="0.5" max="60" step="0.1" oninput="updatePreview()">
+  <span class="unit">s</span>
+  <span class="hint">Time from the start of one burst to the start of the next.</span>
 </div>
 
 <div class="field">
   <label for="startup-delay">Startup delay</label>
-  <input type="number" id="startup-delay" value="500" min="0" max="30000" step="100">
-  <span class="unit">ms</span>
-  <span class="hint">Gap on power-on before the first burst. 500&nbsp;ms is fine on external power; a few seconds is safer on a CR2032.</span>
+  <input type="number" id="startup-delay" value="0.5" min="0" max="30" step="0.1">
+  <span class="unit">s</span>
+  <span class="hint">Gap on power-on before the first burst. 0.5&nbsp;s is fine on external power; a few seconds is safer on a CR2032.</span>
 </div>
 
 <div class="row">
   <strong>Burst preview</strong>
   <div id="preview" style="margin-top:0.4rem"></div>
   <div style="margin-top:0.5rem">
-    <button type="button" onclick="playBurstPreview()">&#9654; Play burst audio</button>
-    <button type="button" onclick="stopAudio()">Stop</button>
+    <button type="button" id="btn-burst-audio" onclick="toggleBurstAudio()">&#9654; Play burst audio</button>
     <span style="color:#666;font-size:0.78rem;margin-left:0.4rem">Approximate sidetone; beep loudness follows the power ramp.</span>
   </div>
 </div>
@@ -273,8 +272,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 
 <div class="field">
   <label>Callsign audio</label>
-  <button type="button" onclick="playCallsignPreview()">&#9654; Play in morse</button>
-  <button type="button" onclick="stopAudio()">Stop</button>
+  <button type="button" id="btn-callsign-audio" onclick="toggleCallsignAudio()">&#9654; Play in morse</button>
   <span style="color:#666;font-size:0.78rem;margin-left:0.4rem">Plays the entered callsign at the beacon's keying speed.</span>
 </div>
 
@@ -484,6 +482,7 @@ function getMode() {
 function currentRange() { return BANDS[getBand()][getRegion()]; }
 
 function intOf(id, dflt) { const v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? dflt : v; }
+function numOf(id, dflt) { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? dflt : v; }
 
 function readUIConfig() {
   const freqMhz = parseFloat(document.getElementById('rf-freq').value) || 435.000;
@@ -504,8 +503,8 @@ function readUIConfig() {
     cw_on_ms:         intOf('cw-on', 40),
     cw_off_ms:        intOf('cw-off', 40),
     cw_offset_hz:     intOf('cw-offset', 150),
-    burst_period_ms:  intOf('burst-period', 2000),
-    startup_delay_ms: intOf('startup-delay', 500),
+    burst_period_ms:  Math.round(numOf('burst-period', 2) * 1000),
+    startup_delay_ms: Math.round(numOf('startup-delay', 0.5) * 1000),
     id_period_ms:     Math.round(idMin * 60000),
     callsign:         (document.getElementById('callsign').value || '').toUpperCase().trim(),
   };
@@ -624,7 +623,17 @@ function syncButtons() {
 }
 
 /* ---- preview ---- */
+// One flat glyph per beep, its width chosen by the tone length, so short beeps
+// stay visually distinct instead of merging into a single bar.
+function beepGlyph(onMs) {
+  if (onMs < 60)  return '\u00B7';   // ·  very short
+  if (onMs < 150) return '-';        // -  short
+  if (onMs < 350) return '\u2013';   // –  medium
+  return '\u2014';                   // —  long
+}
+
 function modeLine(label, count, onMs, offMs, periodMs, powers, tones) {
+  // Proportional bar over the full period (shows duty cycle / where the burst sits).
   const COLS = 54;
   const cells = new Array(COLS).fill(' ');
   let t = 0;
@@ -635,35 +644,45 @@ function modeLine(label, count, onMs, offMs, periodMs, powers, tones) {
     t += onMs;
     if (i < count - 1) t += offMs;
   }
+  // Glyph rhythm: one flat mark per beep, sized by tone length, so short beeps
+  // stay distinct even when the proportional bar packs them together.
+  const glyph = beepGlyph(onMs);
+  const gapSpaces = Math.min(8, Math.max(1, Math.round(offMs / (onMs || 1))));
+  const rhythm = new Array(count).fill(glyph).join(' '.repeat(gapSpaces));
+
   const burst = count * onMs + (count - 1) * offMs;
+  const pad = ' '.repeat(label.length);
   let line = label + ' |' + cells.join('') + '|';
-  line += '\n     ' + count + ' \u00d7 ' + onMs + ' ms, gap ' + offMs + ' ms';
+  line += '\n' + pad + ' |' + rhythm + '|';
+  line += '\n' + pad + '  ' + count + ' \u00d7 ' + onMs + ' ms, gap ' + offMs + ' ms';
   line += '   powers: ' + powers.join(', ') + ' dBm';
-  if (tones) line += '\n     tones: ' + tones.join(', ') + ' Hz';
-  if (burst > periodMs) line += '\n     \u2014 burst exceeds the period!';
+  if (tones) line += '\n' + pad + '  tones: ' + tones.join(', ') + ' Hz';
+  if (burst > periodMs) line += '\n' + pad + '  \u2014 burst exceeds the period!';
   return line;
 }
 
 function updatePreview() {
   const m = getMode();
   const maxPower = intOf('tx-power', 14);
-  const period = intOf('burst-period', 2000);
+  const periodSec = numOf('burst-period', 2);
+  const periodMs = periodSec * 1000;
   const lines = [];
 
   if (m === 0 || m === 2) {
     const c = intOf('fsk-beeps', 3);
     const arp = document.getElementById('fsk-arp').checked;
     const tones = fskToneSeq(c, intOf('fsk-tone', 200), arp);
-    lines.push(modeLine('FSK', c, intOf('fsk-on', 200), intOf('fsk-off', 200), period,
+    lines.push(modeLine('FSK', c, intOf('fsk-on', 200), intOf('fsk-off', 200), periodMs,
                         buildRamp(c, maxPower, document.getElementById('fsk-h2l').checked),
                         arp ? tones : null));
   }
   if (m === 1 || m === 2) {
     const c = intOf('cw-beeps', 4);
-    lines.push(modeLine('CW ', c, intOf('cw-on', 40), intOf('cw-off', 40), period,
+    lines.push(modeLine('CW ', c, intOf('cw-on', 40), intOf('cw-off', 40), periodMs,
                         buildRamp(c, maxPower, document.getElementById('cw-h2l').checked), null));
   }
-  if (m === 2) lines.push('(bursts alternate FSK, CW, FSK, \u2026 every ' + period + ' ms)');
+  if (m === 2) lines.push('(bursts alternate FSK, CW, FSK, \u2026 one every ' + periodSec + ' s)');
+  else lines.push('(one burst every ' + periodSec + ' s)');
 
   const idMin = parseFloat(document.getElementById('id-period').value) || 10;
   lines.push('Callsign ID every ' + idMin + ' min, at max power' + (m === 0 ? ', FSK' : ', CW'));
@@ -685,6 +704,32 @@ let audioCtx = null;
 let audioNodes = [];
 let loopTimer = null;
 let loopState = null;     // { segments, cycleLen, nextTime } while looping
+let activePreview = null; // null | 'burst' | 'callsign'
+let callsignTimer = null; // reverts the callsign button when its one-shot ends
+
+function clearCallsignTimer() {
+  if (callsignTimer !== null) { clearTimeout(callsignTimer); callsignTimer = null; }
+}
+function updateAudioButtons() {
+  const burstBtn = document.getElementById('btn-burst-audio');
+  const callBtn = document.getElementById('btn-callsign-audio');
+  if (burstBtn) burstBtn.innerHTML = (activePreview === 'burst') ? '\u25A0 Stop' : '\u25B6 Play burst audio';
+  if (callBtn)  callBtn.innerHTML  = (activePreview === 'callsign') ? '\u25A0 Stop' : '\u25B6 Play in morse';
+}
+function stopPreview() {
+  clearCallsignTimer();
+  stopAudio();
+  activePreview = null;
+  updateAudioButtons();
+}
+function toggleBurstAudio() {
+  if (activePreview === 'burst') { stopPreview(); return; }
+  playBurstPreview();
+}
+function toggleCallsignAudio() {
+  if (activePreview === 'callsign') { stopPreview(); return; }
+  playCallsignPreview();
+}
 
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -788,7 +833,7 @@ function appendBurst(segments, startS, useCw) {
 
 function playBurstPreview() {
   const m = getMode();
-  const period = intOf('burst-period', 2000) / 1000;
+  const period = numOf('burst-period', 2);   // seconds
   const segments = [];
   let cycleLen;
   if (m === 0) {
@@ -802,7 +847,10 @@ function playBurstPreview() {
     const end = appendBurst(segments, period, true);
     cycleLen = Math.max(2 * period, end);
   }
+  clearCallsignTimer();
   playLoop(segments, cycleLen);
+  activePreview = 'burst';
+  updateAudioButtons();
 }
 
 function playCallsignPreview() {
@@ -822,10 +870,16 @@ function playCallsignPreview() {
     }
     if (ci < cs.length - 1) t += 3 * unit;   // +3U => 4U between letters (firmware timing)
   }
+  if (!segments.length) return;
+  clearCallsignTimer();
   playOnce(segments);
+  activePreview = 'callsign';
+  updateAudioButtons();
+  callsignTimer = setTimeout(() => {
+    callsignTimer = null;
+    if (activePreview === 'callsign') { activePreview = null; updateAudioButtons(); }
+  }, (t + 0.25) * 1000);
 }
-
-/* ---- firmware loading ---- */
 async function initFirmware() {
   try {
     const r = await fetch(FIRMWARE_URL, { cache: 'no-store' });
