@@ -81,7 +81,7 @@ pre.code {
 details { margin: 0.75rem 0; }
 summary { cursor: pointer; }
 
-#preview { font-family: monospace; font-size: 0.82rem; white-space: pre; border: 1px solid #ccc; padding: 0.5rem 0.75rem; overflow-x: auto; }
+#preview { font-size: 0.82rem; border: 1px solid #ccc; padding: 0.5rem 0.75rem; overflow-x: auto; }
 
 #log {
   border: 1px solid #999;
@@ -152,7 +152,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 
 <div class="field">
   <label for="tx-power">Max TX power</label>
-  <input type="range" id="tx-power" min="-9" max="22" value="16" step="1">
+  <input type="range" id="tx-power" min="-9" max="22" value="14" step="1">
   <span class="rangeval" id="tx-power-val">16 dBm</span>
   <span class="hint">Top of the power ramp. Each burst steps down from here toward &minus;9 dBm. &le;16 dBm recommended on a CR2032.</span>
 </div>
@@ -625,40 +625,49 @@ function syncButtons() {
 /* ---- preview ---- */
 // One flat glyph per beep, its width chosen by the tone length, so short beeps
 // stay visually distinct instead of merging into a single bar.
-function beepGlyph(onMs) {
-  if (onMs < 60)  return '\u00B7';   // ·  very short
-  if (onMs < 150) return '-';        // -  short
-  if (onMs < 350) return '\u2013';   // –  medium
-  return '\u2014';                   // —  long
-}
+// Render one or more bursts as a single inline SVG over a shared timespan.
+// Each burst: { offsetMs, count, onMs, offMs, powers, label, hatch }.
+// All beeps in a burst are forced to one integer width and a uniform integer
+// stride, so equal-duration beeps render identically (slightly trading exact
+// cycle-proportionality for visual evenness). Bar height encodes power.
+function burstSvg(bursts, totalMs, dividers) {
+  const W = 600, H = 78, padL = 4, padR = 4, base = 62, topPad = 14;
+  const plotW = W - padL - padR;
+  const maxBarH = base - topPad;
+  const minW = 3;
+  const xOf = ms => padL + (ms / totalMs) * plotW;
+  const wOf = ms => Math.round((ms / totalMs) * plotW);
+  const hOf = p => Math.max(3, Math.round(((p + 9) / 31) * maxBarH));   // -9..22 dBm
 
-function modeLine(label, count, onMs, offMs, periodMs, powers, tones) {
-  // Proportional bar over the full period (shows duty cycle / where the burst sits).
-  const COLS = 54;
-  const cells = new Array(COLS).fill(' ');
-  let t = 0;
-  for (let i = 0; i < count; i++) {
-    const a = Math.floor(t / periodMs * COLS);
-    const b = Math.max(a + 1, Math.round((t + onMs) / periodMs * COLS));
-    for (let k = a; k < b && k < COLS; k++) cells[k] = '#';
-    t += onMs;
-    if (i < count - 1) t += offMs;
+  const defs = '<defs><pattern id="fskhatch" width="5" height="5" patternUnits="userSpaceOnUse" ' +
+               'patternTransform="rotate(45)"><rect width="5" height="5" fill="#ffffff"></rect>' +
+               '<rect width="2" height="5" fill="#555555"></rect></pattern></defs>';
+
+  let body = '';
+  if (dividers) for (const d of dividers) {
+    const x = Math.round(xOf(d));
+    body += '<line x1="' + x + '" y1="' + topPad + '" x2="' + x + '" y2="' + base +
+            '" stroke="#e3e3e3" stroke-width="1" shape-rendering="crispEdges"></line>';
   }
-  // Glyph rhythm: one flat mark per beep, sized by tone length, so short beeps
-  // stay distinct even when the proportional bar packs them together.
-  const glyph = beepGlyph(onMs);
-  const gapSpaces = Math.min(8, Math.max(1, Math.round(offMs / (onMs || 1))));
-  const rhythm = new Array(count).fill(glyph).join(' '.repeat(gapSpaces));
-
-  const burst = count * onMs + (count - 1) * offMs;
-  const pad = ' '.repeat(label.length);
-  let line = label + ' |' + cells.join('') + '|';
-  line += '\n' + pad + ' |' + rhythm + '|';
-  line += '\n' + pad + '  ' + count + ' \u00d7 ' + onMs + ' ms, gap ' + offMs + ' ms';
-  line += '   powers: ' + powers.join(', ') + ' dBm';
-  if (tones) line += '\n' + pad + '  tones: ' + tones.join(', ') + ' Hz';
-  if (burst > periodMs) line += '\n' + pad + '  \u2014 burst exceeds the period!';
-  return line;
+  for (const bu of bursts) {
+    const fill = bu.hatch ? 'url(#fskhatch)' : '#555';
+    const barW = Math.max(minW, wOf(bu.onMs));
+    let stride = wOf(bu.onMs + bu.offMs);
+    stride = Math.max(stride, barW + (bu.offMs > 0 ? 1 : 0));   // keep a 1px gap if there is one
+    const x0 = Math.round(xOf(bu.offsetMs));
+    if (bu.label) body += '<text x="' + x0 + '" y="11" font-size="11" fill="#666" font-family="Arial">' + bu.label + '</text>';
+    for (let i = 0; i < bu.count; i++) {
+      const x = x0 + i * stride;
+      const h = hOf(bu.powers[i]);
+      body += '<rect x="' + x + '" y="' + (base - h) + '" width="' + barW + '" height="' + h +
+              '" fill="' + fill + '" shape-rendering="crispEdges"></rect>';
+    }
+  }
+  const baseline = '<line x1="' + padL + '" y1="' + base + '" x2="' + (W - padR) + '" y2="' + base +
+                   '" stroke="#ccc" stroke-width="1" shape-rendering="crispEdges"></line>';
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMinYMid meet" ' +
+         'style="display:block;max-width:' + W + 'px;height:auto;margin:0.2rem 0">' +
+         defs + baseline + body + '</svg>';
 }
 
 function updatePreview() {
@@ -666,27 +675,53 @@ function updatePreview() {
   const maxPower = intOf('tx-power', 14);
   const periodSec = numOf('burst-period', 2);
   const periodMs = periodSec * 1000;
-  const lines = [];
+  const cap = s => '<div style="font-size:0.8rem;color:#444;margin:0.1rem 0 0.5rem">' + s + '</div>';
+  const warn = ' &middot; <span style="color:#900">burst exceeds the period!</span>';
+
+  // FSK params
+  const fc = intOf('fsk-beeps', 3), fon = intOf('fsk-on', 200), foff = intOf('fsk-off', 200);
+  const farp = document.getElementById('fsk-arp').checked;
+  const ftones = fskToneSeq(fc, intOf('fsk-tone', 200), farp);
+  const fpow = buildRamp(fc, maxPower, document.getElementById('fsk-h2l').checked);
+  const fburst = fc * fon + (fc - 1) * foff;
+  // CW params
+  const cc = intOf('cw-beeps', 4), con = intOf('cw-on', 40), coff = intOf('cw-off', 40);
+  const cpow = buildRamp(cc, maxPower, document.getElementById('cw-h2l').checked);
+  const cburst = cc * con + (cc - 1) * coff;
+
+  let html = '';
+
+  if (m === 0) {
+    html += burstSvg([{ offsetMs: 0, count: fc, onMs: fon, offMs: foff, powers: fpow, label: 'FSK', hatch: true }], periodMs);
+  } else if (m === 1) {
+    html += burstSvg([{ offsetMs: 0, count: cc, onMs: con, offMs: coff, powers: cpow, label: 'CW' }], periodMs);
+  } else {                                   // both: one combined line over two periods
+    html += burstSvg([
+      { offsetMs: 0,        count: fc, onMs: fon, offMs: foff, powers: fpow, label: 'FSK', hatch: true },
+      { offsetMs: periodMs, count: cc, onMs: con, offMs: coff, powers: cpow, label: 'CW' }
+    ], 2 * periodMs, [periodMs]);
+  }
 
   if (m === 0 || m === 2) {
-    const c = intOf('fsk-beeps', 3);
-    const arp = document.getElementById('fsk-arp').checked;
-    const tones = fskToneSeq(c, intOf('fsk-tone', 200), arp);
-    lines.push(modeLine('FSK', c, intOf('fsk-on', 200), intOf('fsk-off', 200), periodMs,
-                        buildRamp(c, maxPower, document.getElementById('fsk-h2l').checked),
-                        arp ? tones : null));
+    let t = 'FSK: ' + fc + ' \u00d7 ' + fon + ' ms, gap ' + foff + ' ms &middot; powers ' + fpow.join(', ') + ' dBm';
+    if (farp) t += ' &middot; tones ' + ftones.join(', ') + ' Hz';
+    if (fburst > periodMs) t += warn;
+    html += cap(t);
   }
   if (m === 1 || m === 2) {
-    const c = intOf('cw-beeps', 4);
-    lines.push(modeLine('CW ', c, intOf('cw-on', 40), intOf('cw-off', 40), periodMs,
-                        buildRamp(c, maxPower, document.getElementById('cw-h2l').checked), null));
+    let t = 'CW: ' + cc + ' \u00d7 ' + con + ' ms, gap ' + coff + ' ms &middot; powers ' + cpow.join(', ') + ' dBm';
+    if (cburst > periodMs) t += warn;
+    html += cap(t);
   }
-  if (m === 2) lines.push('(bursts alternate FSK, CW, FSK, \u2026 one every ' + periodSec + ' s)');
-  else lines.push('(one burst every ' + periodSec + ' s)');
+
+  html += cap((m === 2
+      ? 'Two periods shown; bursts alternate FSK then CW, one every ' + periodSec + ' s.'
+      : 'One burst every ' + periodSec + ' s.') + ' Bar height \u221d power (\u22129 to 22 dBm).');
 
   const idMin = parseFloat(document.getElementById('id-period').value) || 10;
-  lines.push('Callsign ID every ' + idMin + ' min, at max power' + (m === 0 ? ', FSK' : ', CW'));
-  document.getElementById('preview').textContent = lines.join('\n');
+  html += cap('Callsign ID every ' + idMin + ' min, at max power' + (m === 0 ? ', FSK.' : ', CW.'));
+
+  document.getElementById('preview').innerHTML = html;
 }
 
 /* ---- audio preview (Web Audio API) ---- */
