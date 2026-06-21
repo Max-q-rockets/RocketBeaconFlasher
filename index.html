@@ -409,7 +409,7 @@ const BANDS = {
   '440': { usa: [420, 450], r1: [430, 440], r2: [430, 440], r3: [430, 440] },
   '220': { usa: [222, 225], r1: null,       r2: [220, 225], r3: null }
 };
-const BAND_DEFAULT = { '440': 433.225, '220': 223.500 };
+const BAND_DEFAULT = { '440': 435.000, '220': 223.500 };
 const REGION_LABEL = { usa: 'USA', r1: 'ITU Region 1', r2: 'ITU Region 2', r3: 'ITU Region 3' };
 
 let firmwareData = null;
@@ -478,7 +478,7 @@ function currentRange() { return BANDS[getBand()][getRegion()]; }
 function intOf(id, dflt) { const v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? dflt : v; }
 
 function readUIConfig() {
-  const freqMhz = parseFloat(document.getElementById('rf-freq').value) || 433.225;
+  const freqMhz = parseFloat(document.getElementById('rf-freq').value) || 435.000;
   const idMin = parseFloat(document.getElementById('id-period').value) || 10;
   return {
     rf_freq_hz:       Math.round(freqMhz * 1e6),
