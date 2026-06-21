@@ -713,8 +713,8 @@ function clearCallsignTimer() {
 function updateAudioButtons() {
   const burstBtn = document.getElementById('btn-burst-audio');
   const callBtn = document.getElementById('btn-callsign-audio');
-  if (burstBtn) burstBtn.innerHTML = (activePreview === 'burst') ? '\u25A0 Stop' : '\u25B6 Play burst audio';
-  if (callBtn)  callBtn.innerHTML  = (activePreview === 'callsign') ? '\u25A0 Stop' : '\u25B6 Play in morse';
+  if (burstBtn) burstBtn.innerHTML = (activePreview === 'burst') ? '\u25A0 Stop burst audio' : '\u25B6 Play burst audio';
+  if (callBtn)  callBtn.innerHTML  = (activePreview === 'callsign') ? '\u25A0 Stop playing' : '\u25B6 Play in morse';
 }
 function stopPreview() {
   clearCallsignTimer();
