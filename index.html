@@ -732,7 +732,7 @@ function updatePreview() {
       : 'One burst every ' + periodSec + ' s.') + ' Bar height \u221d power (\u22129 to 22 dBm).');
 
   const idMin = parseFloat(document.getElementById('id-period').value) || 10;
-  html += cap('Callsign ID every ' + idMin + ' min, at max power' + (m === 0 ? ', FSK.' : ', CW.'));
+  html += cap('Callsign ID every ' + idMin + ' min, at max power' + (m === 1 ? ', CW.' : ', FSK.'));
 
   document.getElementById('preview').innerHTML = html;
 }
