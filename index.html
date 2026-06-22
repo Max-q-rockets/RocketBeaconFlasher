@@ -631,55 +631,70 @@ function syncButtons() {
 // stride, so equal-duration beeps render identically (slightly trading exact
 // cycle-proportionality for visual evenness). Bar height encodes power.
 function burstSvg(bursts, totalMs, dividers) {
-  // 1. Grab the container and calculate its exact inner content width
+  // CSS width available inside the preview box.
   const previewEl = document.getElementById('preview');
-  let W = 600; // Fallback
+  let cssW = 600; // fallback
   if (previewEl) {
     const style = window.getComputedStyle(previewEl);
-    const paddingL = parseFloat(style.paddingLeft) || 0;
-    const paddingR = parseFloat(style.paddingRight) || 0;
-    // Calculate exact width available for the SVG content
-    W = Math.max(300, Math.round(previewEl.clientWidth - paddingL - paddingR));
+    const padCssL = parseFloat(style.paddingLeft) || 0;
+    const padCssR = parseFloat(style.paddingRight) || 0;
+    cssW = Math.max(300, Math.round(previewEl.clientWidth - padCssL - padCssR));
   }
 
-  const H = 78, padL = 4, padR = 4, base = 62, topPad = 14;
-  const plotW = W - padL - padR;
+  // Work in DEVICE pixels: with display scaling (e.g. Windows 125% ->
+  // devicePixelRatio 1.25), one CSS pixel is a fractional number of device
+  // pixels, so integer CSS coordinates land off the device grid and crispEdges
+  // snaps equal bars to unequal device widths. Building the geometry in device
+  // pixels and showing the SVG at the CSS size makes 1 unit == 1 device pixel,
+  // so every same-width bar is pixel-identical.
+  const S = window.devicePixelRatio || 1;
+  const cssH = 78;
+  const W = Math.round(cssW * S);
+  const H = Math.round(cssH * S);
+  const padL = Math.round(4 * S), padR = Math.round(4 * S);
+  const base = Math.round(62 * S), topPad = Math.round(14 * S);
   const maxBarH = base - topPad;
-  const minW = 3;
+  const minW = Math.max(1, Math.round(1 * S));
+  const sw = Math.max(1, Math.round(S));          // ~1 CSS px strokes
+  const fs = Math.round(11 * S);
+  const labelY = Math.round(11 * S);
+  const gap = Math.max(1, Math.round(S));         // ~1 CSS px min gap between beeps
+  const plotW = W - padL - padR;
   const xOf = ms => padL + (ms / totalMs) * plotW;
   const wOf = ms => Math.round((ms / totalMs) * plotW);
-  const hOf = p => Math.max(3, Math.round(((p + 9) / 31) * maxBarH));   // -9..22 dBm
+  const hOf = p => Math.max(minW, Math.round(((p + 9) / 31) * maxBarH));   // -9..22 dBm
 
-  const defs = '<defs><pattern id="fskhatch" width="5" height="5" patternUnits="userSpaceOnUse" ' +
-               'patternTransform="rotate(45)"><rect width="5" height="5" fill="#ffffff"></rect>' +
-               '<rect width="2.5" height="5" fill="#555555"></rect></pattern></defs>';
+  const ht = Math.round(5 * S), hs = Math.round(2.5 * S);   // hatch tile + stripe
+  const defs = '<defs><pattern id="fskhatch" width="' + ht + '" height="' + ht + '" patternUnits="userSpaceOnUse" ' +
+               'patternTransform="rotate(45)"><rect width="' + ht + '" height="' + ht + '" fill="#ffffff"></rect>' +
+               '<rect width="' + hs + '" height="' + ht + '" fill="#555555"></rect></pattern></defs>';
 
   let body = '';
   if (dividers) for (const d of dividers) {
     const x = Math.round(xOf(d));
     body += '<line x1="' + x + '" y1="' + topPad + '" x2="' + x + '" y2="' + base +
-            '" stroke="#e3e3e3" stroke-width="1" shape-rendering="crispEdges"></line>';
+            '" stroke="#e3e3e3" stroke-width="' + sw + '" shape-rendering="crispEdges"></line>';
   }
   for (const bu of bursts) {
     const fill = bu.hatch ? 'url(#fskhatch)' : '#555';
     const barW = Math.max(minW, wOf(bu.onMs));
     let stride = wOf(bu.onMs + bu.offMs);
-    stride = Math.max(stride, barW + (bu.offMs > 0 ? 1 : 0));   // keep a 1px gap if there is one
+    stride = Math.max(stride, barW + (bu.offMs > 0 ? gap : 0));   // keep a gap if there is one
     const x0 = Math.round(xOf(bu.offsetMs));
-    if (bu.label) body += '<text x="' + x0 + '" y="11" font-size="11" fill="#666" font-family="Arial">' + bu.label + '</text>';
+    if (bu.label) body += '<text x="' + x0 + '" y="' + labelY + '" font-size="' + fs + '" fill="#666" font-family="Arial">' + bu.label + '</text>';
     for (let i = 0; i < bu.count; i++) {
       const x = x0 + i * stride;
       const h = hOf(bu.powers[i]);
       body += '<rect x="' + x + '" y="' + (base - h) + '" width="' + barW + '" height="' + h +
-              '" fill="' + fill + '" shape-rendering="geometricPrecision"></rect>';
+              '" fill="' + fill + '" shape-rendering="crispEdges"></rect>';
     }
   }
   const baseline = '<line x1="' + padL + '" y1="' + base + '" x2="' + (W - padR) + '" y2="' + base +
-                   '" stroke="#ccc" stroke-width="1" shape-rendering="crispEdges"></line>';
-  
-  // 2. Dynamically update the max-width style inline to match W
+                   '" stroke="#ccc" stroke-width="' + sw + '" shape-rendering="crispEdges"></line>';
+
+  // Shown at the CSS width; viewBox is in device pixels, so 1 unit == 1 device pixel.
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMinYMid meet" ' +
-         'style="display:block;max-width:' + W + 'px;height:auto;margin:0.2rem 0">' +
+         'style="display:block;max-width:' + cssW + 'px;height:auto;margin:0.2rem 0">' +
          defs + baseline + body + '</svg>';
 }
 
@@ -1239,6 +1254,10 @@ onModeChange();
 onCallsignChange();
 updateBandLimits();
 updatePreview();
+
+// Re-render the preview when the window resizes or zoom changes the device
+// pixel ratio, so the device-pixel bar geometry stays correct.
+window.addEventListener('resize', updatePreview);
 /* ---- image lightbox (band thumbnails) ---- */
 function openLightbox(src, alt) {
   const lb = document.getElementById('lightbox');
