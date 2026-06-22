@@ -671,7 +671,7 @@ function burstSvg(bursts, totalMs, dividers) {
       const x = x0 + i * stride;
       const h = hOf(bu.powers[i]);
       body += '<rect x="' + x + '" y="' + (base - h) + '" width="' + barW + '" height="' + h +
-              '" fill="' + fill + '" shape-rendering="crispEdges"></rect>';
+              '" fill="' + fill + '" shape-rendering="geometricPrecision"></rect>';
     }
   }
   const baseline = '<line x1="' + padL + '" y1="' + base + '" x2="' + (W - padR) + '" y2="' + base +
