@@ -513,9 +513,9 @@ function readUIConfig() {
 /* ---- power ramp (matches the firmware integer math) ---- */
 function buildRamp(count, maxPower, high2low) {
   const out = new Array(count);
-  const step = count > 1 ? Math.trunc((maxPower + 9) / (count - 1)) : 0;
   for (let j = 0; j < count; j++) {
-    const p = Math.round(maxPower - (maxPower + 9) * j / (count - 1));          // descending: maxPower .. -9
+    // Evenly interpolate from maxPower (j=0) down to -9 dBm (j=count-1).
+    const p = count > 1 ? maxPower - Math.round((maxPower + 9) * j / (count - 1)) : maxPower;
     if (high2low) out[j] = p; else out[count - 1 - j] = p;
   }
   return out;
