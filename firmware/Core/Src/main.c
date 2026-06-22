@@ -534,6 +534,15 @@ int main(void)
   uint32_t last_id = HAL_GetTick();   // just identified
   uint32_t burst_n = 0;
 
+  // In "both" mode, space FSK and CW evenly: the silence after each burst is
+  // (2*period - fskBurst - cwBurst) / 2, so both gaps are equal instead of the
+  // FSK and CW bursts each being padded to a full period (which leaves a short
+  // gap after the longer burst and a long gap after the shorter one).
+  uint32_t fskBurstMs = (uint32_t)fskCount * fskOnMs + (fskCount > 1 ? (uint32_t)(fskCount - 1) * fskOffMs : 0);
+  uint32_t cwBurstMs  = (uint32_t)cwCount  * cwOnMs  + (cwCount  > 1 ? (uint32_t)(cwCount  - 1) * cwOffMs  : 0);
+  int32_t bothGap = ((int32_t)(2 * burstPeriodMs) - (int32_t)fskBurstMs - (int32_t)cwBurstMs) / 2;
+  if (bothGap < 0) bothGap = 0;
+
   while (1)
   {
       uint32_t t0 = HAL_GetTick();
@@ -561,10 +570,16 @@ int main(void)
           last_id = HAL_GetTick();
       }
 
-      // Wait out the rest of the burst period.
-      int32_t wait = (int32_t)burstPeriodMs - (int32_t)(HAL_GetTick() - t0);
-      if (wait > 0) {
-          HAL_Delay(wait);
+      // Wait before the next burst.
+      if (mode == 2) {
+          // Even gap so FSK and CW are equally spaced across the cycle.
+          HAL_Delay((uint32_t)bothGap);
+      } else {
+          // Single mode: pad out the rest of the burst period.
+          int32_t wait = (int32_t)burstPeriodMs - (int32_t)(HAL_GetTick() - t0);
+          if (wait > 0) {
+              HAL_Delay(wait);
+          }
       }
 
     /* USER CODE END WHILE */

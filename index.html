@@ -723,11 +723,13 @@ function updatePreview() {
     html += burstSvg([{ offsetMs: 0, count: fc, onMs: fon, offMs: foff, powers: fpow, label: 'FSK', hatch: true }], periodMs);
   } else if (m === 1) {
     html += burstSvg([{ offsetMs: 0, count: cc, onMs: con, offMs: coff, powers: cpow, label: 'CW' }], periodMs);
-  } else {                                   // both: one combined line over two periods
+  } else {                                   // both: FSK and CW evenly spaced across the two-period cycle
+    const totalMs = 2 * periodMs;
+    const gap = Math.max(0, (totalMs - fburst - cburst) / 2);
     html += burstSvg([
-      { offsetMs: 0,        count: fc, onMs: fon, offMs: foff, powers: fpow, label: 'FSK', hatch: true },
-      { offsetMs: periodMs, count: cc, onMs: con, offMs: coff, powers: cpow, label: 'CW' }
-    ], 2 * periodMs, [periodMs]);
+      { offsetMs: 0,            count: fc, onMs: fon, offMs: foff, powers: fpow, label: 'FSK', hatch: true },
+      { offsetMs: fburst + gap, count: cc, onMs: con, offMs: coff, powers: cpow, label: 'CW' }
+    ], totalMs);
   }
 
   if (m === 0 || m === 2) {
@@ -908,10 +910,16 @@ function buildBurstCycle() {
   } else if (m === 1) {
     const end = appendBurst(segments, 0, true);
     cycleLen = Math.max(period, end);
-  } else {                                   // both: FSK in period 1, CW in period 2, then repeat
+  } else {                                   // both: FSK and CW evenly spaced across the two-period cycle
+    const totalS = 2 * period;
+    const fc = Math.max(1, intOf('fsk-beeps', 3));
+    const dFsk = fc * (intOf('fsk-on', 200) / 1000) + (fc - 1) * (intOf('fsk-off', 200) / 1000);
+    const cc = Math.max(1, intOf('cw-beeps', 4));
+    const dCw = cc * (intOf('cw-on', 40) / 1000) + (cc - 1) * (intOf('cw-off', 40) / 1000);
+    const gap = Math.max(0, (totalS - dFsk - dCw) / 2);
     appendBurst(segments, 0, false);
-    const end = appendBurst(segments, period, true);
-    cycleLen = Math.max(2 * period, end);
+    const end = appendBurst(segments, dFsk + gap, true);
+    cycleLen = Math.max(totalS, end);
   }
   return { segments: segments, cycleLen: cycleLen };
 }
