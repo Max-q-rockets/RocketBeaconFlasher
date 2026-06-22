@@ -521,6 +521,8 @@ int main(void)
       beacon_burst(false, fskCount, fskPowers, fskTones, center_freq, freq_correction, 0,          fskOnMs, fskOffMs);
   }
 
+  HAL_Delay(startupDelayMs);
+
   if (useMorse) {
       HAL_Delay(id_cw ? cwOffMs : fskOffMs);
       play_morse_word(callsign, callsignLen, id_cw, fskToneHz);
