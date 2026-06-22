@@ -751,7 +751,7 @@ const MORSE = {
 let audioCtx = null;
 let audioNodes = [];
 let loopTimer = null;
-let loopState = null;     // { segments, cycleLen, nextTime } while looping
+let loopState = null;     // { builder, nextTime } while looping
 let activePreview = null; // null | 'burst' | 'callsign'
 let callsignTimer = null; // reverts the callsign button when its one-shot ends
 
@@ -834,17 +834,18 @@ function playOnce(segments) {
 }
 
 // Loop one cycle (segments relative to 0, total length cycleLenS) until stopped.
-function playLoop(segments, cycleLenS) {
-  if (!segments.length || cycleLenS <= 0) return;
+function playLoop(builder) {
   const ctx = getAudioCtx();
   stopAudio();
-  loopState = { segments, cycleLen: cycleLenS, nextTime: ctx.currentTime + 0.1 };
+  loopState = { builder: builder, nextTime: ctx.currentTime + 0.1 };
   const LOOKAHEAD = 0.35;                     // schedule this far ahead, in seconds
   const tick = () => {
     if (!loopState) return;
     while (loopState.nextTime < ctx.currentTime + LOOKAHEAD) {
-      scheduleSegmentsAt(loopState.segments, loopState.nextTime);
-      loopState.nextTime += loopState.cycleLen;
+      const cyc = loopState.builder();        // rebuild from current parameters each cycle
+      if (!cyc.segments.length || cyc.cycleLen <= 0) return;
+      scheduleSegmentsAt(cyc.segments, loopState.nextTime);
+      loopState.nextTime += cyc.cycleLen;
     }
   };
   tick();
@@ -879,7 +880,9 @@ function appendBurst(segments, startS, useCw) {
   return t;
 }
 
-function playBurstPreview() {
+// Build one cycle of burst segments from the CURRENT control values, so a
+// running loop reflects parameter edits at the next cycle boundary.
+function buildBurstCycle() {
   const m = getMode();
   const period = numOf('burst-period', 2);   // seconds
   const segments = [];
@@ -895,8 +898,12 @@ function playBurstPreview() {
     const end = appendBurst(segments, period, true);
     cycleLen = Math.max(2 * period, end);
   }
+  return { segments: segments, cycleLen: cycleLen };
+}
+
+function playBurstPreview() {
   clearCallsignTimer();
-  playLoop(segments, cycleLen);
+  playLoop(buildBurstCycle);
   activePreview = 'burst';
   updateAudioButtons();
 }
