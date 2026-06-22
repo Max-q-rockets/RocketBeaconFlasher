@@ -219,7 +219,7 @@ void LED_off() {
 uint32_t morse_unit_ms = 70;
 int8_t morse_power = 10;
 
-void play_morse_char(uint8_t ascii_letter, bool use_cw) {
+void play_morse_char(uint8_t ascii_letter, bool use_cw, uint32_t fskfreq) {
     uint8_t morse_code = 0b11111111;
     if (ascii_letter > 31 && ascii_letter < 123) {
         morse_code = morse_chars[ascii_letter - 32];
@@ -251,7 +251,7 @@ void play_morse_char(uint8_t ascii_letter, bool use_cw) {
             if (use_cw) {
                 CWBeep(morse_power, morse_unit_ms * 3);
             } else {
-                FSKBeep(morse_power, 400, morse_unit_ms * 3);
+                FSKBeep(morse_power, fskfreq, morse_unit_ms * 3);
             }
         } else {
             // make dit
@@ -259,32 +259,27 @@ void play_morse_char(uint8_t ascii_letter, bool use_cw) {
             if (use_cw) {
                 CWBeep(morse_power, morse_unit_ms);
             } else {
-                FSKBeep(morse_power, 400, morse_unit_ms);
+                FSKBeep(morse_power, fskfreq, morse_unit_ms);
             }
         }
         LED_off();
 
         // Make delay.
-        if (use_cw) {
-            HAL_Delay(morse_unit_ms);
-        } else {
-            HAL_Delay(morse_unit_ms);
-            //CWBeep(morse_power, morse_unit_ms);
-        }
+        HAL_Delay(morse_unit_ms);
     }
 }
 
-void play_morse_word(uint8_t* letters, uint8_t len, bool use_cw) {
+void play_morse_word(uint8_t* letters, uint8_t len, bool use_cw, uint32_t fskfreq) {
     for (uint8_t i = 0; i < len; i++) {
-        play_morse_char(letters[i], use_cw);
-
+        play_morse_char(letters[i], use_cw, fskfreq);
+        HAL_Delay(morse_unit_ms * 3);
         // Space between letters
-        if (use_cw) {
-            HAL_Delay(morse_unit_ms * 3);
-        } else {
+//        if (use_cw) {
+
+//        } else {
             //CWBeep(morse_power, morse_unit_ms);
-            HAL_Delay(morse_unit_ms * 3);
-        }
+//            HAL_Delay(morse_unit_ms * 3);
+//        }
     }
 }
 
@@ -528,7 +523,7 @@ int main(void)
 
   if (useMorse) {
       HAL_Delay(id_cw ? cwOffMs : fskOffMs);
-      play_morse_word(callsign, callsignLen, id_cw);
+      play_morse_word(callsign, callsignLen, id_cw, fskToneHz);
   }
 
   uint32_t last_id = HAL_GetTick();   // just identified
@@ -566,7 +561,7 @@ int main(void)
       // burst; it lands at the first gap after idPeriodMs has elapsed.
       if (useMorse && (uint32_t)(HAL_GetTick() - last_id) >= idPeriodMs) {
           HAL_Delay(id_cw ? cwOffMs : fskOffMs);
-          play_morse_word(callsign, callsignLen, id_cw);
+          play_morse_word(callsign, callsignLen, id_cw, fskToneHz);
           last_id = HAL_GetTick();
       }
 
