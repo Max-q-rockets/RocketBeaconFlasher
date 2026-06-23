@@ -643,7 +643,7 @@ function onCallsignChange() {
   el.className = st.ok ? 'msg ok' : 'msg bad';
   // Visual Morse: each character's code, letters separated by a wider gap.
   document.getElementById('callsign-morse').textContent =
-    cs ? cs.split('').map(c => MORSE[c] || '').filter(Boolean).join('   ') : '';
+    cs ? cs.split('').map(c => MORSE[c] || '').filter(Boolean).join('  ') : '';
   syncButtons();
 }
 
