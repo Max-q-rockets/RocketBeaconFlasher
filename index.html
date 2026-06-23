@@ -45,6 +45,7 @@ input[type=text], input[type=number], select {
 input[type=number] { width: 9rem; }
 input[type=text] { width: 12rem; }
 input[type=range] { vertical-align: middle; width: 12rem; }
+.share-link { width: 30rem; max-width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.78rem; }
 input:disabled { background: #eee; color: #999; }
 .unit { color: #444; font-size: 0.85rem; margin-left: 0.3rem; }
 .rangeval { display: inline-block; min-width: 4rem; font-family: monospace; }
@@ -69,6 +70,7 @@ table.info td { padding: 0.15rem 0.75rem 0.15rem 0; vertical-align: top; }
 .ok { color: #060; }
 .bad { color: #900; }
 .msg { font-size: 0.82rem; margin: 0.2rem 0 0 170px; }
+.morse { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1rem; letter-spacing: 2px; color: #555; margin: 0.15rem 0 0 170px; white-space: pre-wrap; }
 
 pre.code {
   border: 1px solid #ccc;
@@ -145,7 +147,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 
 <div class="field">
   <label for="rf-freq">Center frequency</label>
-  <input type="number" id="rf-freq" value="435.000" step="0.001" oninput="validateFreq()">
+  <input type="number" id="rf-freq" value="435.000" step="0.001" oninput="validateFreq()" onblur="clampFreqInput()" onkeydown="if(event.key==='Enter')clampFreqInput()">
   <span class="unit">MHz</span>
   <div id="freq-msg" class="msg"></div>
 </div>
@@ -270,6 +272,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9\/]/g,'');onCallsignChange()">
   <span class="hint">Your assigned amateur radio callsign. A&ndash;Z, 0&ndash;9, optional /suffix.</span>
   <div id="callsign-msg" class="msg"></div>
+  <div id="callsign-morse" class="morse" aria-hidden="true"></div>
 </div>
 
 <div class="field">
@@ -286,6 +289,16 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
   elapses (never mid-burst). In the US, FCC &sect;97.119 requires ID at least every 10&nbsp;minutes, so set this slightly
   under 10 if you want margin. The ID transmits at max power, in FM for FM/Both modes.</span>
 </div>
+<div class="field">
+  <label>Share config</label>
+  <button type="button" id="btn-share" onclick="copyShareLink()">Copy shareable link</button>
+  <span class="hint">Builds a link that pre-fills this form with the current settings for sharing a standard configuration. The link carries the form values only, not the firmware binary.</span>
+  <span id="share-status" class="hint" aria-live="polite"></span>
+</div>
+<div class="field" id="share-link-row" style="display:none">
+  <label for="share-link">Link</label>
+  <input type="text" id="share-link" class="share-link" readonly onfocus="this.select()" onclick="this.select()">
+</div>
 </fieldset>
 
 <!-- ===================== STEP 2: FLASH / DOWNLOAD ===================== -->
@@ -299,7 +312,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 <p style="font-size:0.85rem;color:#555">
 The base binary is built once from the rocketbeacon source with a patchable config block (config <b>version 4</b>),
 then committed to <span class="mono">firmware/rocketbeacon.bin</span> in this repository. This tool fetches it, patches
-your settings in, and recomputes the checksum &mdash; visitors never compile or upload anything.
+your settings in, and recomputes the checksum. Visitors never compile or upload anything.
 </p>
 
 <p style="font-size:0.85rem;color:#555">
@@ -340,7 +353,7 @@ all-<span class="mono">0xFF</span> regions automatically.
   <h3>Flash over serial (Chrome / Edge only)</h3>
   <p class="subtitle">
     Flash directly through a USB&rarr;UART adapter. Put the beacon in bootloader mode first:
-    hold the button while connecting power &mdash; the LED stays solidly ON.
+    hold the button while connecting power. The LED stays solidly ON.
   </p>
 
   <div class="notice">
@@ -593,20 +606,44 @@ function validateFreq() {
   el.className = st.ok ? 'msg' : 'msg bad';
   syncButtons();
 }
+// On commit (blur/Enter): snap an out-of-band frequency to the nearest edge,
+// leaving the red note up so it's clear the value was changed (like the gap fields).
+function clampFreqInput() {
+  const range = currentRange();
+  if (!range) return;               // band not allocated here; handled by updateBandLimits
+  const el = document.getElementById('rf-freq');
+  let v = parseFloat(el.value), snapped = false;
+  if (isNaN(v)) {
+    v = BAND_DEFAULT[getBand()];
+    if (v < range[0] || v > range[1]) v = (range[0] + range[1]) / 2;
+    snapped = true;
+  } else if (v < range[0]) { v = range[0]; snapped = true; }
+  else if (v > range[1]) { v = range[1]; snapped = true; }
+  if (!snapped) return;
+  el.value = v.toFixed(3);
+  const msg = document.getElementById('freq-msg');
+  msg.textContent = 'Snapped to the nearest band edge (' + v.toFixed(3) + ' MHz).';
+  msg.className = 'msg bad';
+  syncButtons();
+}
 
 /* ---- callsign validation ---- */
 function callsignStatus(raw) {
   const cs = (raw || '').toUpperCase().trim();
   if (!cs) return { ok: false, msg: 'Enter your amateur radio callsign.' };
-  if (cs === 'N0CALL') return { ok: false, msg: 'N0CALL is a placeholder \u2014 enter your own callsign.' };
+  if (cs === 'N0CALL') return { ok: false, msg: 'N0CALL is a placeholder. Enter your own callsign.' };
   if (!CALLSIGN_RE.test(cs)) return { ok: false, msg: 'Does not match an amateur callsign format (e.g. AB0CDE).' };
   return { ok: true, msg: 'Valid callsign format.' };
 }
 function onCallsignChange() {
-  const st = callsignStatus(document.getElementById('callsign').value);
+  const cs = document.getElementById('callsign').value;
+  const st = callsignStatus(cs);
   const el = document.getElementById('callsign-msg');
-  el.textContent = document.getElementById('callsign').value ? st.msg : '';
+  el.textContent = cs ? st.msg : '';
   el.className = st.ok ? 'msg ok' : 'msg bad';
+  // Visual Morse: each character's code, letters separated by a wider gap.
+  document.getElementById('callsign-morse').textContent =
+    cs ? cs.split('').map(c => MORSE[c] || '').filter(Boolean).join('   ') : '';
   syncButtons();
 }
 
@@ -722,7 +759,7 @@ function checkGap(el) {
   const v = parseFloat(el.value);
   if (el.value !== '' && !isNaN(v) && v < GAP_OVERHEAD_MS) {
     setGapMsg(el, 'Gap can\u2019t be below ' + GAP_OVERHEAD_MS +
-      ' ms \u2014 the radio needs that long to retune between beeps.');
+      ' ms. The radio needs that long to retune between beeps.');
   } else {
     setGapMsg(el, '');
   }
@@ -734,7 +771,7 @@ function clampGap(el) {
   if (el.value === '' || isNaN(v) || v < GAP_OVERHEAD_MS) {
     el.value = GAP_OVERHEAD_MS;
     setGapMsg(el, 'Raised to the ' + GAP_OVERHEAD_MS +
-      ' ms minimum \u2014 the radio needs that long to retune between beeps.');
+      ' ms minimum. The radio needs that long to retune between beeps.');
     updatePreview();
   }
 }
@@ -862,7 +899,7 @@ function scheduleSegmentsAt(segments, startAbs) {
   for (const s of segments) {
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
-    osc.type = 'sine';
+    osc.type = s.wave || 'sine';
     osc.frequency.value = s.freq;
     const st = startAbs + s.start;
     const en = st + s.dur;
@@ -921,7 +958,7 @@ function appendBurst(segments, startS, useCw) {
     const tones = fskToneSeq(c, intOf('fsk-tone', 200), document.getElementById('fsk-arp').checked);
     const powers = buildRamp(c, maxPower, document.getElementById('fsk-h2l').checked);
     for (let j = 0; j < c; j++) {
-      segments.push({ freq: clampFreq(tones[j]), start: t, dur: on, amp: powerAmp(powers[j], maxPower) });
+      segments.push({ freq: clampFreq(tones[j]), start: t, dur: on, amp: powerAmp(powers[j], maxPower), wave: 'square' });
       t += on + (j < c - 1 ? off : 0);
     }
   } else {
@@ -931,7 +968,7 @@ function appendBurst(segments, startS, useCw) {
     const offset = intOf('cw-offset', 150);
     const powers = buildRamp(c, maxPower, document.getElementById('cw-h2l').checked);
     for (let j = 0; j < c; j++) {           // 600 Hz base sidetone + per-beep pitch step
-      segments.push({ freq: clampFreq(600 + offset * j), start: t, dur: on, amp: powerAmp(powers[j], maxPower) });
+      segments.push({ freq: clampFreq(600 + offset * j), start: t, dur: on, amp: powerAmp(powers[j], maxPower), wave: 'sine' });
       t += on + (j < c - 1 ? off : 0);
     }
   }
@@ -976,7 +1013,13 @@ function playCallsignPreview() {
   const cs = (document.getElementById('callsign').value || '').toUpperCase().trim();
   if (!cs) return;
   const unit = 0.07;                         // 70 ms, matches firmware morse_unit_ms
-  const freq = 600, amp = 0.28;
+  const amp = 0.28;
+  // Callsign ID is sent CW only in pure-CW mode; FSK in FSK and both modes
+  // (firmware: id_cw = (mode == 1)). Match that timbre and pitch here: CW uses
+  // the 600 Hz sidetone, FSK uses the configured FSK base tone.
+  const isCw = (getMode() === 1);
+  const wave = isCw ? 'sine' : 'square';
+  const freq = isCw ? 600 : clampFreq(intOf('fsk-tone', 200));
   const segments = [];
   let t = 0;
   for (let ci = 0; ci < cs.length; ci++) {
@@ -984,7 +1027,7 @@ function playCallsignPreview() {
     if (!code) { t += 3 * unit; continue; }
     for (let ei = 0; ei < code.length; ei++) {
       const dur = (code[ei] === '-' ? 3 : 1) * unit;
-      segments.push({ freq, start: t, dur, amp });
+      segments.push({ freq, start: t, dur, amp, wave });
       t += dur + unit;                       // element + 1U intra-element gap
     }
     if (ci < cs.length - 1) t += 3 * unit;   // +3U => 4U between letters (firmware timing)
@@ -1130,7 +1173,7 @@ class STM32Boot {
     await this.s.write([0x7F]);
     let b;
     try { b = await this.s.readByte(3000); }
-    catch (e) { throw new Error('no response \u2014 check wiring, 8E1 parity, and bootloader mode'); }
+    catch (e) { throw new Error('no response. Check wiring, 8E1 parity, and bootloader mode'); }
     if (b === STM32Boot.ACK || b === STM32Boot.NACK) {
       // ACK = freshly initialized; NACK = was already initialized. Either way
       // the bootloader is now ready for commands.
@@ -1198,7 +1241,7 @@ async function connectSerial() {
     log('syncing with bootloader...');
     try {
       await new STM32Boot(byteStream).sync();
-      log('bootloader responded \u2014 ready', 's');
+      log('bootloader responded. Ready to flash', 's');
     } catch (e) {
       log(e.message, 'e');
       log('is the beacon in bootloader mode (LED solid ON)?', 'e');
@@ -1298,14 +1341,79 @@ document.getElementById('code-ld').textContent =
     KEEP(*(.beacon_config))
 } > FLASH`;
 
+/* ---- shareable config link ---- */
+// Only the user-facing settings travel in the link (not flasher/baud or firmware).
+const SHARE_FIELDS = ['rf-freq','tx-power','fsk-beeps','fsk-on','fsk-off','fsk-tone',
+  'cw-beeps','cw-on','cw-off','cw-offset','burst-period','startup-delay','callsign','id-period'];
+const SHARE_CHECKS = ['fsk-h2l','fsk-arp','cw-h2l'];
+const SHARE_RADIOS = ['mode','band','region'];
+
+function collectConfigState() {
+  const s = {};
+  SHARE_FIELDS.forEach(id => { const el = document.getElementById(id); if (el) s[id] = el.value; });
+  SHARE_CHECKS.forEach(id => { const el = document.getElementById(id); if (el) s[id] = el.checked ? 1 : 0; });
+  SHARE_RADIOS.forEach(n => { const el = document.querySelector('input[name="' + n + '"]:checked'); if (el) s[n] = el.value; });
+  return s;
+}
+function applyConfigState(s) {
+  SHARE_RADIOS.forEach(n => {
+    if (s[n] != null) {
+      const el = document.querySelector('input[name="' + n + '"][value="' + s[n] + '"]');
+      if (el) el.checked = true;
+    }
+  });
+  SHARE_CHECKS.forEach(id => {
+    if (s[id] != null) { const el = document.getElementById(id); if (el) el.checked = !!Number(s[id]); }
+  });
+  SHARE_FIELDS.forEach(id => {
+    if (s[id] != null) { const el = document.getElementById(id); if (el) el.value = s[id]; }
+  });
+}
+// base64url so the hash stays clean (no +, /, = needing escaping). Values are ASCII.
+function encodeState(s) {
+  return btoa(JSON.stringify(s)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function decodeState(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  return JSON.parse(atob(str));
+}
+function buildShareLink() {
+  return location.origin + location.pathname + '#cfg=' + encodeState(collectConfigState());
+}
+function copyShareLink() {
+  const url = buildShareLink();
+  const box = document.getElementById('share-link');
+  const status = document.getElementById('share-status');
+  document.getElementById('share-link-row').style.display = '';
+  box.value = url;
+  const done = ok => { status.textContent = ok ? 'Link copied to clipboard.' : 'Copy the link from the box below.'; };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => done(true), () => { box.focus(); box.select(); done(false); });
+  } else {
+    box.focus(); box.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    done(ok);
+  }
+}
+function loadConfigFromHash() {
+  const m = location.hash.match(/[#&]cfg=([^&]+)/);
+  if (!m) return false;
+  try { applyConfigState(decodeState(m[1])); return true; }
+  catch (e) { return false; }
+}
+
 /* ---- init ---- */
 // Keep the arrow/step floor tied to the overhead constant (single source of truth).
 document.getElementById('fsk-off').min = GAP_OVERHEAD_MS;
 document.getElementById('cw-off').min = GAP_OVERHEAD_MS;
+const loadedShared = loadConfigFromHash();   // pre-fill from a shared link, if present
 onModeChange();
 onCallsignChange();
 updateBandLimits();
+document.getElementById('tx-power-val').textContent = document.getElementById('tx-power').value + ' dBm';
 updatePreview();
+if (loadedShared) document.getElementById('share-status').textContent = 'Settings loaded from a shared link.';
 
 // Re-render the preview when the window resizes or zoom changes the device
 // pixel ratio, so the device-pixel bar geometry stays correct.
