@@ -187,8 +187,9 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 </div>
 <div class="field">
   <label for="fsk-off">Gap between beeps</label>
-  <input type="number" id="fsk-off" value="200" min="10" max="5000" step="10" oninput="updatePreview()">
+  <input type="number" id="fsk-off" value="200" min="20" max="5000" step="10" oninput="checkGap(this); updatePreview()">
   <span class="unit">ms</span>
+  <div id="fsk-off-msg" class="msg"></div>
 </div>
 <div class="field checkbox-field">
   <label style="min-width:170px">Tone arpeggio</label>
@@ -221,8 +222,9 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 </div>
 <div class="field">
   <label for="cw-off">Gap between beeps</label>
-  <input type="number" id="cw-off" value="50" min="5" max="5000" step="5" oninput="updatePreview()">
+  <input type="number" id="cw-off" value="50" min="20" max="5000" step="5" oninput="checkGap(this); updatePreview()">
   <span class="unit">ms</span>
+  <div id="cw-off-msg" class="msg"></div>
 </div>
 <div class="field">
   <label for="cw-offset">Per-beep pitch step</label>
@@ -411,6 +413,13 @@ const FIRMWARE_URL = './firmware/Debug/rocketbeacon.bin';
 
 const CALLSIGN_RE = /^[A-Z0-9]{1,2}[0-9][A-Z]{1,4}(\/[A-Z0-9]{1,4})?$/;
 
+// Each beep adds a fixed slice of radio reconfiguration dead-time to the gap
+// that follows it (SetStandby/SetTxPower/SetModulationParams + HAL_Delay calls),
+// measured at ~20 ms by SDR. Subtract it from the configured gap before writing
+// to the binary so the real on-air gap matches what the user typed.
+const GAP_OVERHEAD_MS = 20;   // measured per-beep gap inflation; re-measure to tune
+const GAP_MIN_MS = 0;         // floor for the programmed gap so it never goes negative
+
 const BANDS = {
   '440': { usa: [420, 450], r1: [430, 440], r2: [430, 440], r3: [430, 440] },
   '220': { usa: [222, 225], r1: null,       r2: [220, 225], r3: null }
@@ -497,11 +506,11 @@ function readUIConfig() {
     fsk_arpeggio:     document.getElementById('fsk-arp').checked ? 1 : 0,
     fsk_tone_hz:      intOf('fsk-tone', 200),
     fsk_on_ms:        intOf('fsk-on', 200),
-    fsk_off_ms:       intOf('fsk-off', 200),
+    fsk_off_ms:       Math.max(GAP_MIN_MS, intOf('fsk-off', 200) - GAP_OVERHEAD_MS),
     cw_num_beeps:     intOf('cw-beeps', 4),
     cw_high2low:      document.getElementById('cw-h2l').checked ? 1 : 0,
-    cw_on_ms:         intOf('cw-on', 40),
-    cw_off_ms:        intOf('cw-off', 40),
+    cw_on_ms:         intOf('cw-on', 15),
+    cw_off_ms:        Math.max(GAP_MIN_MS, intOf('cw-off', 50) - GAP_OVERHEAD_MS),
     cw_offset_hz:     intOf('cw-offset', 150),
     burst_period_ms:  Math.round(numOf('burst-period', 2) * 1000),
     startup_delay_ms: Math.round(numOf('startup-delay', 0.5) * 1000),
@@ -696,6 +705,25 @@ function burstSvg(bursts, totalMs, dividers) {
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMinYMid meet" ' +
          'style="display:block;max-width:' + cssW + 'px;height:auto;margin:0.2rem 0">' +
          defs + baseline + body + '</svg>';
+}
+
+/* ---- gap minimum validation ---- */
+// The radio needs ~GAP_OVERHEAD_MS to retune between beeps, so a configured gap
+// below that can't be realized (it floors at GAP_OVERHEAD_MS on air). The arrows
+// are blocked by the input's min; this catches values typed in by hand.
+function checkGap(el) {
+  const msg = document.getElementById(el.id + '-msg');
+  if (!msg) return;
+  const v = parseFloat(el.value);
+  if (el.value !== '' && !isNaN(v) && v < GAP_OVERHEAD_MS) {
+    msg.textContent = 'Gap can\u2019t be below ' + GAP_OVERHEAD_MS +
+      ' ms. The radio needs time to retune between beeps, so the minimum is ' +
+      GAP_OVERHEAD_MS + ' ms.';
+    msg.className = 'msg bad';
+  } else {
+    msg.textContent = '';
+    msg.className = 'msg';
+  }
 }
 
 function updatePreview() {
@@ -1258,6 +1286,9 @@ document.getElementById('code-ld').textContent =
 } > FLASH`;
 
 /* ---- init ---- */
+// Keep the arrow/step floor tied to the overhead constant (single source of truth).
+document.getElementById('fsk-off').min = GAP_OVERHEAD_MS;
+document.getElementById('cw-off').min = GAP_OVERHEAD_MS;
 onModeChange();
 onCallsignChange();
 updateBandLimits();
