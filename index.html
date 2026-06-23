@@ -187,7 +187,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 </div>
 <div class="field">
   <label for="fsk-off">Gap between beeps</label>
-  <input type="number" id="fsk-off" value="200" min="20" max="5000" step="10" oninput="checkGap(this); updatePreview()">
+  <input type="number" id="fsk-off" value="200" min="20" max="5000" step="10" oninput="checkGap(this); updatePreview()" onblur="clampGap(this)" onkeydown="if(event.key==='Enter')clampGap(this)">
   <span class="unit">ms</span>
   <div id="fsk-off-msg" class="msg"></div>
 </div>
@@ -222,7 +222,7 @@ hr { border: none; border-top: 1px solid #ccc; margin: 1.5rem 0; }
 </div>
 <div class="field">
   <label for="cw-off">Gap between beeps</label>
-  <input type="number" id="cw-off" value="50" min="20" max="5000" step="5" oninput="checkGap(this); updatePreview()">
+  <input type="number" id="cw-off" value="50" min="20" max="5000" step="5" oninput="checkGap(this); updatePreview()" onblur="clampGap(this)" onkeydown="if(event.key==='Enter')clampGap(this)">
   <span class="unit">ms</span>
   <div id="cw-off-msg" class="msg"></div>
 </div>
@@ -710,19 +710,32 @@ function burstSvg(bursts, totalMs, dividers) {
 /* ---- gap minimum validation ---- */
 // The radio needs ~GAP_OVERHEAD_MS to retune between beeps, so a configured gap
 // below that can't be realized (it floors at GAP_OVERHEAD_MS on air). The arrows
-// are blocked by the input's min; this catches values typed in by hand.
-function checkGap(el) {
+// are blocked by the input's min; these handlers catch hand-typed values.
+function setGapMsg(el, text) {
   const msg = document.getElementById(el.id + '-msg');
   if (!msg) return;
+  msg.textContent = text || '';
+  msg.className = text ? 'msg bad' : 'msg';
+}
+// Live feedback while typing.
+function checkGap(el) {
   const v = parseFloat(el.value);
   if (el.value !== '' && !isNaN(v) && v < GAP_OVERHEAD_MS) {
-    msg.textContent = 'Gap can\u2019t be below ' + GAP_OVERHEAD_MS +
-      ' ms. The radio needs time to retune between beeps, so the minimum is ' +
-      GAP_OVERHEAD_MS + ' ms.';
-    msg.className = 'msg bad';
+    setGapMsg(el, 'Gap can\u2019t be below ' + GAP_OVERHEAD_MS +
+      ' ms \u2014 the radio needs that long to retune between beeps.');
   } else {
-    msg.textContent = '';
-    msg.className = 'msg';
+    setGapMsg(el, '');
+  }
+}
+// On commit (blur or Enter): snap a too-small value up to the floor, but leave
+// the red message up so it's clear the value was changed.
+function clampGap(el) {
+  const v = parseFloat(el.value);
+  if (el.value === '' || isNaN(v) || v < GAP_OVERHEAD_MS) {
+    el.value = GAP_OVERHEAD_MS;
+    setGapMsg(el, 'Raised to the ' + GAP_OVERHEAD_MS +
+      ' ms minimum \u2014 the radio needs that long to retune between beeps.');
+    updatePreview();
   }
 }
 
